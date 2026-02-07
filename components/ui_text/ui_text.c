@@ -586,16 +586,19 @@ int ui_text_draw_wrapped(uint8_t *fb, const ui_font_t *font,
     return cur_y - y;
 }
 
-int ui_text_paginate(const ui_font_t *font, const char *text,
-                     int width, int max_height, int line_spacing) {
-    if (!font || !text || width <= 0 || max_height <= 0) return 0;
+int ui_text_paginate_ex(const ui_font_t *font, const char *text,
+                        int width, int max_height, int line_spacing,
+                        int *out_height) {
+    if (!font || !text || width <= 0 || max_height <= 0) {
+        if (out_height) *out_height = 0;
+        return 0;
+    }
 
     const char *p = text;
     int lh = font->line_height + line_spacing;
     int cur_h = 0;
 
     while (*p) {
-        /* Check if another line fits */
         if (cur_h + lh > max_height) break;
 
         int line_width;
@@ -605,9 +608,14 @@ int ui_text_paginate(const ui_font_t *font, const char *text,
         p += consumed;
         cur_h += lh;
 
-        /* Skip leading spaces on next line */
         while (*p == ' ') p++;
     }
 
+    if (out_height) *out_height = cur_h;
     return (int)(p - text);
+}
+
+int ui_text_paginate(const ui_font_t *font, const char *text,
+                     int width, int max_height, int line_spacing) {
+    return ui_text_paginate_ex(font, text, width, max_height, line_spacing, NULL);
 }

@@ -180,6 +180,21 @@ int ui_text_draw_wrapped(uint8_t *fb, const ui_font_t *font,
 int ui_text_paginate(const ui_font_t *font, const char *text,
                      int width, int max_height, int line_spacing);
 
+/**
+ * @brief Extended paginate: also returns the actual height consumed.
+ *
+ * @param font         Font handle.
+ * @param text         UTF-8 string.
+ * @param width        Available width for text wrapping.
+ * @param max_height   Available height.
+ * @param line_spacing Extra pixels between lines.
+ * @param out_height   [out] Actual height consumed (may be NULL).
+ * @return Number of bytes from text that fit in the area.
+ */
+int ui_text_paginate_ex(const ui_font_t *font, const char *text,
+                        int width, int max_height, int line_spacing,
+                        int *out_height);
+
 #ifdef __cplusplus
 }
 #endif

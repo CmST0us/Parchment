@@ -459,6 +459,223 @@ static char *html_to_text(const char *html, size_t html_len) {
 }
 
 /* ========================================================================== */
+/*  HTML → structured content blocks (text + images)                           */
+/* ========================================================================== */
+
+/**
+ * @brief Extract <img> src attribute from a tag string like '<img src="foo.png" />'.
+ */
+static bool extract_img_src(const char *tag_start, const char *tag_end,
+                             char *src, int src_size) {
+    /* Search for src=" within the tag */
+    const char *p = tag_start;
+    while (p < tag_end) {
+        if (p + 4 < tag_end && strncmp(p, "src=", 4) == 0) {
+            p += 4;
+            char quote = *p;
+            if (quote == '"' || quote == '\'') {
+                p++;
+                const char *end = memchr(p, quote, tag_end - p);
+                if (end) {
+                    int len = (int)(end - p);
+                    if (len >= src_size) len = src_size - 1;
+                    memcpy(src, p, len);
+                    src[len] = '\0';
+                    return true;
+                }
+            }
+        }
+        p++;
+    }
+    return false;
+}
+
+/**
+ * @brief Flush accumulated text into a TEXT block.
+ */
+static void flush_text_block(epub_chapter_content_t *content,
+                              char *text_buf, int *text_wp) {
+    if (*text_wp <= 0 || !content) return;
+
+    /* Trim trailing whitespace */
+    while (*text_wp > 0 &&
+           (text_buf[*text_wp - 1] == ' ' || text_buf[*text_wp - 1] == '\n')) {
+        (*text_wp)--;
+    }
+    if (*text_wp <= 0) return;
+    text_buf[*text_wp] = '\0';
+
+    if (content->block_count >= EPUB_MAX_BLOCKS) return;
+
+    epub_content_block_t *blk = &content->blocks[content->block_count];
+    blk->type = EPUB_BLOCK_TEXT;
+    blk->text = (char *)malloc(*text_wp + 1);
+    if (blk->text) {
+        memcpy(blk->text, text_buf, *text_wp + 1);
+        content->block_count++;
+    }
+
+    *text_wp = 0;
+}
+
+/**
+ * @brief Parse HTML into structured content blocks (text + images).
+ *
+ * Similar to html_to_text() but outputs content blocks instead of a single string.
+ * <img> tags produce IMAGE blocks; other content produces TEXT blocks.
+ */
+static epub_chapter_content_t *html_to_content(
+    const char *html, size_t html_len,
+    epub_book_t *book, const char *chapter_path) {
+
+    epub_chapter_content_t *content =
+        (epub_chapter_content_t *)calloc(1, sizeof(epub_chapter_content_t));
+    if (!content) return NULL;
+
+    content->blocks = (epub_content_block_t *)calloc(EPUB_MAX_BLOCKS,
+                                                      sizeof(epub_content_block_t));
+    if (!content->blocks) { free(content); return NULL; }
+
+    /* Compute base path for resolving relative image src */
+    char chapter_base[256];
+    path_dirname(chapter_path, chapter_base, sizeof(chapter_base));
+
+    /* Text accumulation buffer */
+    char *text_buf = (char *)malloc(html_len + 1);
+    if (!text_buf) {
+        free(content->blocks);
+        free(content);
+        return NULL;
+    }
+    int wp = 0;
+
+    bool in_tag = false;
+    bool in_body = false;
+    bool body_found = false;
+    char tag_buf[1024];
+    int tag_len = 0;
+    bool last_was_newline = true;
+    bool last_was_space = true;
+
+    for (size_t i = 0; i < html_len; i++) {
+        char c = html[i];
+
+        if (in_tag) {
+            if (tag_len < (int)sizeof(tag_buf) - 1)
+                tag_buf[tag_len++] = c;
+
+            if (c == '>') {
+                tag_buf[tag_len] = '\0';
+
+                /* Extract tag name */
+                char tag_name[64];
+                int tn_len = 0;
+                bool is_close = false;
+                const char *tn_start = tag_buf;
+                if (*tn_start == '/') { is_close = true; tn_start++; }
+                while (tn_start[tn_len] &&
+                       tn_start[tn_len] != ' ' && tn_start[tn_len] != '>' &&
+                       tn_start[tn_len] != '/' && tn_start[tn_len] != '\t' &&
+                       tn_start[tn_len] != '\n' &&
+                       tn_len < (int)sizeof(tag_name) - 1) {
+                    tag_name[tn_len] = (char)tolower((unsigned char)tn_start[tn_len]);
+                    tn_len++;
+                }
+                tag_name[tn_len] = '\0';
+
+                /* Track <body> */
+                if (strcmp(tag_name, "body") == 0) {
+                    if (is_close) in_body = false;
+                    else { in_body = true; body_found = true; }
+                }
+
+                if (in_body || !body_found) {
+                    /* Handle <img> tag → IMAGE block */
+                    if (strcmp(tag_name, "img") == 0 && !is_close) {
+                        char src[256] = {0};
+                        if (extract_img_src(tag_buf, tag_buf + tag_len, src, sizeof(src))
+                            && src[0]) {
+                            /* Flush any accumulated text first */
+                            flush_text_block(content, text_buf, &wp);
+                            last_was_newline = true;
+                            last_was_space = true;
+
+                            /* Resolve image path relative to chapter */
+                            char img_path[512];
+                            if (src[0] == '/') {
+                                snprintf(img_path, sizeof(img_path), "%s", src + 1);
+                            } else {
+                                snprintf(img_path, sizeof(img_path), "%s%s",
+                                         chapter_base, src);
+                            }
+
+                            /* Extract image from ZIP */
+                            int idx = mz_zip_reader_locate_file(
+                                &book->zip, img_path, NULL, 0);
+                            if (idx >= 0 && content->block_count < EPUB_MAX_BLOCKS) {
+                                size_t img_size;
+                                void *img_data = mz_zip_reader_extract_to_heap(
+                                    &book->zip, idx, &img_size, 0);
+                                if (img_data) {
+                                    epub_content_block_t *blk =
+                                        &content->blocks[content->block_count];
+                                    blk->type = EPUB_BLOCK_IMAGE;
+                                    blk->image.data = (uint8_t *)img_data;
+                                    blk->image.data_len = img_size;
+                                    content->block_count++;
+                                }
+                            }
+                        }
+                    }
+                    /* Handle block-level tags → newline */
+                    else if (is_block_tag(tag_name, tn_len)) {
+                        if (wp > 0 && !last_was_newline) {
+                            text_buf[wp++] = '\n';
+                            last_was_newline = true;
+                            last_was_space = true;
+                        }
+                    }
+                }
+
+                in_tag = false;
+            }
+        } else {
+            if (c == '<') {
+                in_tag = true;
+                tag_len = 0;
+            } else if (!in_body && body_found) {
+                continue;
+            } else if (c == '&') {
+                char decoded;
+                int consumed = decode_entity(html + i + 1, &decoded);
+                if (consumed > 0) i += consumed;
+                if (decoded == ' ' || decoded == '\t') {
+                    if (!last_was_space) { text_buf[wp++] = ' '; last_was_space = true; }
+                } else {
+                    text_buf[wp++] = decoded;
+                    last_was_space = false;
+                    last_was_newline = false;
+                }
+            } else if (c == '\n' || c == '\r') {
+                if (!last_was_space) { text_buf[wp++] = ' '; last_was_space = true; }
+            } else if (c == ' ' || c == '\t') {
+                if (!last_was_space) { text_buf[wp++] = ' '; last_was_space = true; }
+            } else {
+                text_buf[wp++] = c;
+                last_was_space = false;
+                last_was_newline = false;
+            }
+        }
+    }
+
+    /* Flush remaining text */
+    flush_text_block(content, text_buf, &wp);
+    free(text_buf);
+
+    return content;
+}
+
+/* ========================================================================== */
 /*  Public API                                                                 */
 /* ========================================================================== */
 
@@ -542,4 +759,47 @@ char *epub_get_chapter_text(epub_book_t *book, int chapter_index) {
     free(html);
 
     return text;
+}
+
+epub_chapter_content_t *epub_get_chapter_content(epub_book_t *book,
+                                                  int chapter_index) {
+    if (!book || chapter_index < 0 || chapter_index >= book->chapter_count) {
+        return NULL;
+    }
+
+    const char *path = book->chapters[chapter_index];
+
+    int idx = mz_zip_reader_locate_file(&book->zip, path, NULL, 0);
+    if (idx < 0) {
+        fprintf(stderr, "epub: chapter file not found in ZIP: %s\n", path);
+        return NULL;
+    }
+
+    size_t size;
+    char *html = (char *)mz_zip_reader_extract_to_heap(&book->zip, idx, &size, 0);
+    if (!html) {
+        fprintf(stderr, "epub: failed to extract chapter: %s\n", path);
+        return NULL;
+    }
+
+    epub_chapter_content_t *content = html_to_content(html, size, book, path);
+    free(html);
+
+    return content;
+}
+
+void epub_free_chapter_content(epub_chapter_content_t *content) {
+    if (!content) return;
+
+    for (int i = 0; i < content->block_count; i++) {
+        epub_content_block_t *blk = &content->blocks[i];
+        if (blk->type == EPUB_BLOCK_TEXT) {
+            free(blk->text);
+        } else if (blk->type == EPUB_BLOCK_IMAGE) {
+            free(blk->image.data);
+        }
+    }
+
+    free(content->blocks);
+    free(content);
 }

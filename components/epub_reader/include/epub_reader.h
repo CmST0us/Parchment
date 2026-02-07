@@ -7,19 +7,16 @@
  *   - Opening ePub files (ZIP-based format)
  *   - Extracting book metadata (title, author)
  *   - Enumerating chapters via the OPF spine
- *   - Extracting chapter plain text (HTML tags stripped, entities decoded)
- *
- * Limitations (intentional for embedded use):
- *   - No CSS interpretation
- *   - No image rendering
- *   - Basic HTML entity decoding (&amp; &lt; &gt; &quot; &#NNN; &#xHHH;)
- *   - Assumes well-formed ePub structure
+ *   - Extracting chapter content as structured blocks (text + images)
+ *   - Image data extraction from the ZIP archive
  */
 
 #ifndef EPUB_READER_H
 #define EPUB_READER_H
 
 #include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,72 +28,81 @@ extern "C" {
 /** Maximum length of metadata strings. */
 #define EPUB_MAX_METADATA_LEN 256
 
+/** Maximum content blocks per chapter. */
+#define EPUB_MAX_BLOCKS 512
+
 /** Opaque book handle. */
 typedef struct epub_book epub_book_t;
+
+/** Content block type. */
+typedef enum {
+    EPUB_BLOCK_TEXT,   /**< Plain text paragraph(s). */
+    EPUB_BLOCK_IMAGE,  /**< Embedded image. */
+} epub_block_type_t;
+
+/** A single content block (text or image). */
+typedef struct {
+    epub_block_type_t type;
+    union {
+        char *text;                     /**< TEXT: heap-allocated string. */
+        struct {
+            uint8_t *data;              /**< IMAGE: raw file data from ZIP. */
+            size_t   data_len;          /**< IMAGE: data length in bytes. */
+        } image;
+    };
+} epub_content_block_t;
+
+/** Chapter content: array of content blocks. */
+typedef struct {
+    epub_content_block_t *blocks;       /**< Array of blocks. */
+    int                   block_count;  /**< Number of blocks. */
+} epub_chapter_content_t;
 
 /* ========================================================================== */
 /*  Lifecycle                                                                  */
 /* ========================================================================== */
 
-/**
- * @brief Open an ePub file.
- *
- * Parses the ZIP archive, reads container.xml and the OPF package document,
- * and builds the chapter list from the spine.
- *
- * @param filepath  Path to the .epub file.
- * @return Book handle, or NULL on failure.
- */
 epub_book_t *epub_open(const char *filepath);
-
-/**
- * @brief Close an ePub book and free all resources.
- *
- * @param book  Book handle (NULL-safe).
- */
 void epub_close(epub_book_t *book);
 
 /* ========================================================================== */
 /*  Metadata                                                                   */
 /* ========================================================================== */
 
-/**
- * @brief Get the book title.
- *
- * @return Title string, or "Unknown" if not available.
- */
 const char *epub_get_title(const epub_book_t *book);
-
-/**
- * @brief Get the book author.
- *
- * @return Author string, or "Unknown" if not available.
- */
 const char *epub_get_author(const epub_book_t *book);
 
 /* ========================================================================== */
 /*  Chapters                                                                   */
 /* ========================================================================== */
 
-/**
- * @brief Get the number of chapters (spine items).
- */
 int epub_get_chapter_count(const epub_book_t *book);
 
 /**
- * @brief Get the plain text content of a chapter.
- *
- * Extracts the chapter's XHTML file from the ZIP archive, strips all HTML
- * tags, decodes entities, and normalizes whitespace. Block elements
- * (<p>, <div>, <br>, <h1>-<h6>) are converted to newline characters.
+ * @brief Get the plain text content of a chapter (legacy API).
  *
  * The returned string is heap-allocated; the caller must free() it.
+ */
+char *epub_get_chapter_text(epub_book_t *book, int chapter_index);
+
+/**
+ * @brief Get structured content of a chapter (text + images).
+ *
+ * Returns an array of content blocks representing the chapter's
+ * text paragraphs and inline images in reading order.
  *
  * @param book           Book handle.
  * @param chapter_index  Chapter index (0-based).
- * @return Plain text string (caller frees), or NULL on error.
+ * @return Chapter content, or NULL on error. Caller must call
+ *         epub_free_chapter_content().
  */
-char *epub_get_chapter_text(epub_book_t *book, int chapter_index);
+epub_chapter_content_t *epub_get_chapter_content(epub_book_t *book,
+                                                  int chapter_index);
+
+/**
+ * @brief Free chapter content returned by epub_get_chapter_content().
+ */
+void epub_free_chapter_content(epub_chapter_content_t *content);
 
 #ifdef __cplusplus
 }

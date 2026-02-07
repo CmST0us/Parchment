@@ -24,6 +24,7 @@
 #include "sd_storage.h"
 #include "ui_core.h"
 #include "ui_text.h"
+#include "ui_image.h"
 #include "epub_reader.h"
 
 static const char *TAG = "parchment";
@@ -118,7 +119,7 @@ static void shelf_scan(void) {
 }
 
 /* ========================================================================== */
-/*  阅读页面                                                                    */
+/*  阅读页面 — 图文混排                                                         */
 /* ========================================================================== */
 
 #define READ_MARGIN_X     30
@@ -128,52 +129,163 @@ static void shelf_scan(void) {
 #define READ_BODY_H       855
 #define READ_FOOTER_Y     920
 #define READ_LINE_SPACING 2
+#define READ_IMG_SPACING  10   /* 图片上下间距 */
 #define READ_MAX_PAGES    4096
 
 static epub_book_t *s_book = NULL;
 static int  s_chapter_idx  = 0;
-static char *s_chapter_text = NULL;
-
-static int  s_page_offsets[READ_MAX_PAGES];
-static int  s_page_count   = 0;
-static int  s_page_idx     = 0;
 static bool s_read_full_render = true;
 
+/** 章节内容（图文混排块） */
+static epub_chapter_content_t *s_chapter_content = NULL;
+
+/** 预解码的图片缓存 */
+static ui_image_t **s_decoded_images = NULL; /* 与 blocks 等长，TEXT块为NULL */
+static int s_decoded_count = 0;
+
+/**
+ * 分页索引：每页记录 (block_idx, text_offset)。
+ * text_offset 仅对 TEXT 块有效，表示该页从该块文本的哪个字节偏移开始。
+ * 对 IMAGE 块，text_offset 固定为 0。
+ */
+typedef struct {
+    int block_idx;
+    int text_offset;
+} page_pos_t;
+
+static page_pos_t s_page_starts[READ_MAX_PAGES];
+static int  s_page_count = 0;
+static int  s_page_idx   = 0;
+
+/* ---- 资源管理 ---- */
+
 static void reading_free_chapter(void) {
-    if (s_chapter_text) {
-        free(s_chapter_text);
-        s_chapter_text = NULL;
+    if (s_decoded_images) {
+        for (int i = 0; i < s_decoded_count; i++) {
+            if (s_decoded_images[i]) ui_image_free(s_decoded_images[i]);
+        }
+        free(s_decoded_images);
+        s_decoded_images = NULL;
+        s_decoded_count = 0;
+    }
+    if (s_chapter_content) {
+        epub_free_chapter_content(s_chapter_content);
+        s_chapter_content = NULL;
     }
     s_page_count = 0;
     s_page_idx = 0;
 }
 
+/** 预解码所有图片块 */
+static void reading_decode_images(void) {
+    if (!s_chapter_content) return;
+    int n = s_chapter_content->block_count;
+    s_decoded_images = (ui_image_t **)calloc(n, sizeof(ui_image_t *));
+    s_decoded_count = n;
+    if (!s_decoded_images) { s_decoded_count = 0; return; }
+
+    for (int i = 0; i < n; i++) {
+        epub_content_block_t *blk = &s_chapter_content->blocks[i];
+        if (blk->type == EPUB_BLOCK_IMAGE) {
+            s_decoded_images[i] = ui_image_decode(blk->image.data,
+                                                   blk->image.data_len);
+            if (s_decoded_images[i]) {
+                ESP_LOGI(TAG, "  Image block %d: %dx%d decoded",
+                         i, s_decoded_images[i]->width, s_decoded_images[i]->height);
+            }
+        }
+    }
+}
+
+/* ---- 分页 ---- */
+
 static void reading_paginate(void) {
     s_page_count = 0;
-    if (!s_chapter_text || !s_font_body) return;
+    if (!s_chapter_content || !s_font_body) return;
 
-    const char *p = s_chapter_text;
-    s_page_offsets[0] = 0;
+    int blk_count = s_chapter_content->block_count;
+    int cur_block = 0;
+    int cur_text_off = 0;
 
-    while (*p && s_page_count < READ_MAX_PAGES - 1) {
-        int consumed = ui_text_paginate(s_font_body, p,
-                                         READ_BODY_W, READ_BODY_H,
-                                         READ_LINE_SPACING);
-        if (consumed <= 0) break;
+    while (cur_block < blk_count && s_page_count < READ_MAX_PAGES - 1) {
+        /* 记录当前页起始位置 */
+        s_page_starts[s_page_count].block_idx = cur_block;
+        s_page_starts[s_page_count].text_offset = cur_text_off;
 
-        p += consumed;
-        while (*p == ' ') p++;
+        int remaining_h = READ_BODY_H;
+        bool page_has_content = false;
 
-        s_page_count++;
-        s_page_offsets[s_page_count] = (int)(p - s_chapter_text);
-    }
+        while (cur_block < blk_count && remaining_h > 0) {
+            epub_content_block_t *blk = &s_chapter_content->blocks[cur_block];
 
-    if (s_page_count == 0 && s_chapter_text[0]) {
-        s_page_count = 1;
+            if (blk->type == EPUB_BLOCK_IMAGE) {
+                ui_image_t *img = (cur_block < s_decoded_count)
+                                  ? s_decoded_images[cur_block] : NULL;
+                int img_h = img ? ui_image_get_height(img, READ_BODY_W) : 0;
+                int needed = img_h + READ_IMG_SPACING;
+
+                if (!page_has_content) {
+                    /* 图片是本页第一个元素，无论多大都放入 */
+                    cur_block++;
+                    cur_text_off = 0;
+                    remaining_h -= needed;
+                    page_has_content = true;
+                } else if (needed <= remaining_h) {
+                    /* 图片能放下 */
+                    cur_block++;
+                    cur_text_off = 0;
+                    remaining_h -= needed;
+                } else {
+                    /* 放不下，留到下一页 */
+                    break;
+                }
+            } else {
+                /* TEXT 块 */
+                const char *text = blk->text + cur_text_off;
+                if (!*text) {
+                    cur_block++;
+                    cur_text_off = 0;
+                    continue;
+                }
+
+                int text_h = 0;
+                int consumed = ui_text_paginate_ex(s_font_body, text,
+                                                    READ_BODY_W, remaining_h,
+                                                    READ_LINE_SPACING, &text_h);
+                if (consumed <= 0) {
+                    if (!page_has_content) {
+                        cur_block++;
+                        cur_text_off = 0;
+                    }
+                    break;
+                }
+
+                cur_text_off += consumed;
+                while (blk->text[cur_text_off] == ' ') cur_text_off++;
+
+                remaining_h -= text_h;
+                page_has_content = true;
+
+                if (!blk->text[cur_text_off]) {
+                    cur_block++;
+                    cur_text_off = 0;
+                } else {
+                    remaining_h = 0;
+                }
+            }
+        }
+
+        if (page_has_content) {
+            s_page_count++;
+        } else {
+            break; /* 没有内容可排了 */
+        }
     }
 
     s_page_idx = 0;
-    ESP_LOGI(TAG, "Chapter %d: %d pages", s_chapter_idx + 1, s_page_count);
+    ESP_LOGI(TAG, "Chapter %d: %d pages (%d blocks)",
+             s_chapter_idx + 1, s_page_count,
+             s_chapter_content ? s_chapter_content->block_count : 0);
 }
 
 static bool reading_load_chapter(int chapter_idx) {
@@ -183,20 +295,24 @@ static bool reading_load_chapter(int chapter_idx) {
 
     reading_free_chapter();
     s_chapter_idx = chapter_idx;
-    s_chapter_text = epub_get_chapter_text(s_book, chapter_idx);
-    if (!s_chapter_text) {
+
+    s_chapter_content = epub_get_chapter_content(s_book, chapter_idx);
+    if (!s_chapter_content) {
         ESP_LOGE(TAG, "Failed to load chapter %d", chapter_idx);
         return false;
     }
 
+    reading_decode_images();
     reading_paginate();
     return true;
 }
 
+/* ---- 渲染 ---- */
+
 static void reading_draw(uint8_t *fb) {
     ui_canvas_fill(fb, UI_COLOR_WHITE);
 
-    if (!s_font_body || !s_chapter_text) {
+    if (!s_font_body || !s_chapter_content || s_page_count == 0) {
         if (s_font_body) {
             ui_text_draw_line(fb, s_font_body, READ_MARGIN_X, 100,
                               "No content available.", UI_COLOR_BLACK);
@@ -204,7 +320,7 @@ static void reading_draw(uint8_t *fb) {
         return;
     }
 
-    /* 顶部栏：书名 + 章节号 */
+    /* 顶部栏 */
     if (s_font_btn) {
         const char *title = s_book ? epub_get_title(s_book) : "Book";
         ui_text_draw_line(fb, s_font_btn, READ_MARGIN_X, READ_HEADER_Y,
@@ -222,15 +338,68 @@ static void reading_draw(uint8_t *fb) {
     ui_canvas_draw_hline(fb, READ_MARGIN_X, READ_BODY_Y - 8,
                          UI_SCREEN_WIDTH - 2 * READ_MARGIN_X, UI_COLOR_LIGHT);
 
-    /* 正文 */
-    const char *page_text = s_chapter_text + s_page_offsets[s_page_idx];
-    ui_text_draw_wrapped(fb, s_font_body,
-                         READ_MARGIN_X, READ_BODY_Y,
-                         READ_BODY_W, READ_BODY_H,
-                         page_text, UI_COLOR_BLACK,
-                         UI_TEXT_ALIGN_LEFT, READ_LINE_SPACING);
+    /* ---- 渲染当前页内容 ---- */
+    page_pos_t start = s_page_starts[s_page_idx];
+    page_pos_t end;
+    if (s_page_idx + 1 < s_page_count) {
+        end = s_page_starts[s_page_idx + 1];
+    } else {
+        end.block_idx = s_chapter_content->block_count;
+        end.text_offset = 0;
+    }
 
-    /* 底部栏：页码 */
+    int cur_y = READ_BODY_Y;
+    int blk_count = s_chapter_content->block_count;
+
+    for (int bi = start.block_idx; bi < blk_count && bi <= end.block_idx; bi++) {
+        if (cur_y >= READ_BODY_Y + READ_BODY_H) break;
+
+        epub_content_block_t *blk = &s_chapter_content->blocks[bi];
+
+        if (blk->type == EPUB_BLOCK_IMAGE) {
+            ui_image_t *img = (bi < s_decoded_count) ? s_decoded_images[bi] : NULL;
+            if (img) {
+                int img_h = ui_image_get_height(img, READ_BODY_W);
+                /* 居中绘制 */
+                int img_w = img->width;
+                if (READ_BODY_W < img_w) img_w = READ_BODY_W;
+                int img_x = READ_MARGIN_X + (READ_BODY_W - img_w) / 2;
+                ui_image_draw(fb, img, img_x, cur_y, READ_BODY_W);
+                cur_y += img_h + READ_IMG_SPACING;
+            }
+        } else {
+            /* TEXT 块 */
+            int t_start = (bi == start.block_idx) ? start.text_offset : 0;
+            int t_end_off;
+            if (bi == end.block_idx && end.text_offset > 0) {
+                t_end_off = end.text_offset;
+            } else if (bi < end.block_idx) {
+                t_end_off = (int)strlen(blk->text);
+            } else {
+                t_end_off = (int)strlen(blk->text);
+            }
+
+            /* 绘制该部分文本 */
+            const char *text = blk->text + t_start;
+            int text_len = t_end_off - t_start;
+            if (text_len <= 0) continue;
+
+            /* 临时 null-terminate 该段 */
+            char saved = blk->text[t_end_off];
+            blk->text[t_end_off] = '\0';
+
+            int drawn_h = ui_text_draw_wrapped(fb, s_font_body,
+                                                READ_MARGIN_X, cur_y,
+                                                READ_BODY_W,
+                                                READ_BODY_Y + READ_BODY_H - cur_y,
+                                                text, UI_COLOR_BLACK,
+                                                UI_TEXT_ALIGN_LEFT, READ_LINE_SPACING);
+            blk->text[t_end_off] = saved;
+            cur_y += drawn_h;
+        }
+    }
+
+    /* 底部栏 */
     ui_canvas_draw_hline(fb, READ_MARGIN_X, READ_FOOTER_Y - 5,
                          UI_SCREEN_WIDTH - 2 * READ_MARGIN_X, UI_COLOR_LIGHT);
 

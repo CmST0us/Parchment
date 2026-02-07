@@ -38,6 +38,12 @@ set(UI_TEXT_SOURCES
     ${UI_TEXT_DIR}/ui_text.c
 )
 
+# Reuse ui_image sources
+set(UI_IMAGE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../components/ui_image)
+set(UI_IMAGE_SOURCES
+    ${UI_IMAGE_DIR}/ui_image.c
+)
+
 # Reuse epub_reader sources
 set(EPUB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../components/epub_reader)
 set(EPUB_SOURCES
@@ -60,6 +66,7 @@ add_executable(parchment_sim
     ${SIM_SOURCES}
     ${UI_CORE_SOURCES}
     ${UI_TEXT_SOURCES}
+    ${UI_IMAGE_SOURCES}
     ${EPUB_SOURCES}
     ${APP_SOURCES}
 )
@@ -75,6 +82,8 @@ target_include_directories(parchment_sim PRIVATE
     ${UI_CORE_DIR}/include
     ${UI_TEXT_DIR}/include
     ${UI_TEXT_DIR}
+    ${UI_IMAGE_DIR}/include
+    ${UI_IMAGE_DIR}
     ${EPUB_DIR}/include
     ${EPUB_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/epd_driver/include
