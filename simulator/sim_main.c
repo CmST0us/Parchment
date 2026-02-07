@@ -198,8 +198,54 @@ static void update_texture(void) {
 /*  Main                                                                       */
 /* -------------------------------------------------------------------------- */
 
+/** Optional screenshot path: if set, save framebuffer after first render and exit. */
+static const char *s_screenshot_path = NULL;
+
+/**
+ * @brief Save current framebuffer as BMP to the given path.
+ */
+static void save_screenshot_bmp(const char *path) {
+    SDL_Surface *surf = SDL_CreateRGBSurface(0, SCREEN_W, SCREEN_H, 32,
+                                              0x00FF0000, 0x0000FF00,
+                                              0x000000FF, 0xFF000000);
+    if (!surf) {
+        fprintf(stderr, "Failed to create surface: %s\n", SDL_GetError());
+        return;
+    }
+
+    uint8_t *fb = epd_driver_get_framebuffer();
+    if (!fb) { SDL_FreeSurface(surf); return; }
+
+    uint32_t *dst = (uint32_t *)surf->pixels;
+    int dst_stride = surf->pitch / 4;
+
+    for (int sy = 0; sy < SCREEN_H; sy++) {
+        for (int sx = 0; sx < SCREEN_W; sx++) {
+            int px = sy, py = sx;
+            uint8_t byte_val = fb[py * (FB_PHYS_W / 2) + px / 2];
+            uint8_t gray;
+            if (px & 1) { gray = byte_val & 0xF0; }
+            else        { gray = (byte_val & 0x0F) << 4; }
+            gray = gray | (gray >> 4);
+            dst[sy * dst_stride + sx] = 0xFF000000u | (gray << 16) | (gray << 8) | gray;
+        }
+    }
+
+    if (SDL_SaveBMP(surf, path) == 0) {
+        printf("Screenshot saved: %s\n", path);
+    } else {
+        fprintf(stderr, "Failed to save BMP: %s\n", SDL_GetError());
+    }
+    SDL_FreeSurface(surf);
+}
+
 int main(int argc, char *argv[]) {
-    (void)argc; (void)argv;
+    /* Check for --screenshot option */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
+            s_screenshot_path = argv[++i];
+        }
+    }
 
     /* ---- SDL init ---- */
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -312,6 +358,13 @@ int main(int argc, char *argv[]) {
             SDL_RenderClear(s_renderer);
             SDL_RenderCopy(s_renderer, s_texture, NULL, NULL);
             SDL_RenderPresent(s_renderer);
+
+            /* Screenshot mode: save after first render and exit */
+            if (s_screenshot_path) {
+                SDL_Delay(100); /* Brief delay for render completion */
+                save_screenshot_bmp(s_screenshot_path);
+                running = false;
+            }
         }
 
         SDL_Delay(16); /* ~60 fps */
