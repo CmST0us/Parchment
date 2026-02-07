@@ -38,7 +38,17 @@ set(UI_TEXT_SOURCES
     ${UI_TEXT_DIR}/ui_text.c
 )
 
-# Application main (provides app_main and test page)
+# Reuse epub_reader sources
+set(EPUB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../components/epub_reader)
+set(EPUB_SOURCES
+    ${EPUB_DIR}/epub_reader.c
+    ${EPUB_DIR}/miniz/miniz.c
+    ${EPUB_DIR}/miniz/miniz_tdef.c
+    ${EPUB_DIR}/miniz/miniz_tinfl.c
+    ${EPUB_DIR}/miniz/miniz_zip.c
+)
+
+# Application main (provides app_main and home/reading pages)
 set(APP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c
 )
@@ -50,6 +60,7 @@ add_executable(parchment_sim
     ${SIM_SOURCES}
     ${UI_CORE_SOURCES}
     ${UI_TEXT_SOURCES}
+    ${EPUB_SOURCES}
     ${APP_SOURCES}
 )
 
@@ -64,6 +75,8 @@ target_include_directories(parchment_sim PRIVATE
     ${UI_CORE_DIR}/include
     ${UI_TEXT_DIR}/include
     ${UI_TEXT_DIR}
+    ${EPUB_DIR}/include
+    ${EPUB_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/epd_driver/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/gt911/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/sd_storage/include

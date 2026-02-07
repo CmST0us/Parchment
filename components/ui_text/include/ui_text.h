@@ -160,6 +160,26 @@ int ui_text_draw_wrapped(uint8_t *fb, const ui_font_t *font,
                          const char *text, uint8_t color,
                          ui_text_align_t align, int line_spacing);
 
+/* ========================================================================== */
+/*  Pagination                                                                 */
+/* ========================================================================== */
+
+/**
+ * @brief Compute how many bytes of text fit within a rectangular area.
+ *
+ * Uses the same line-wrapping logic as ui_text_draw_wrapped() but does not
+ * render anything. Useful for computing page boundaries in a paginated view.
+ *
+ * @param font         Font handle.
+ * @param text         UTF-8 string.
+ * @param width        Available width for text wrapping.
+ * @param max_height   Available height.
+ * @param line_spacing Extra pixels between lines.
+ * @return Number of bytes from text that fit in the area.
+ */
+int ui_text_paginate(const ui_font_t *font, const char *text,
+                     int width, int max_height, int line_spacing);
+
 #ifdef __cplusplus
 }
 #endif
