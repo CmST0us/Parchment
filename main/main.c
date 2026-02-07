@@ -4,9 +4,11 @@
  *
  * 初始化硬件和 UI 框架，推入交互测试页面，启动事件循环。
  * 测试页面包含：
- *   - 6 个 Toggle 按钮 (TAP)
+ *   - 标题文字 (TrueType 渲染)
+ *   - 6 个 Toggle 按钮 (TAP)，带文字标签
  *   - 5 点翻页指示器 (SWIPE LEFT/RIGHT)
  *   - 进度条 (SWIPE UP/DOWN)
+ *   - 文本换行渲染示例区域
  *   - 长按全部重置 (LONG PRESS)
  */
 
@@ -21,12 +23,32 @@
 #include "gt911.h"
 #include "sd_storage.h"
 #include "ui_core.h"
+#include "ui_text.h"
 
 static const char *TAG = "parchment";
 
 /* ========================================================================== */
 /*  交互测试页面                                                                */
 /* ========================================================================== */
+
+/* ---- 字体 ---- */
+
+/** 字体搜索路径列表（按优先级）。 */
+static const char *s_font_search_paths[] = {
+    "/sdcard/font.ttf",                                                  /* ESP32 SD 卡 */
+    "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",               /* Linux CJK */
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",   /* Linux */
+    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",                   /* Linux */
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",                   /* Linux */
+    "/System/Library/Fonts/PingFang.ttc",                                /* macOS CJK */
+    "/System/Library/Fonts/Helvetica.ttc",                               /* macOS */
+    "font.ttf",                                                          /* 当前目录 */
+    NULL,
+};
+
+static ui_font_t *s_font_title = NULL;  /**< 标题字体 (32px) */
+static ui_font_t *s_font_body  = NULL;  /**< 正文字体 (22px) */
+static ui_font_t *s_font_btn   = NULL;  /**< 按钮标签字体 (18px) */
 
 /* ---- 布局常量 ---- */
 
@@ -59,6 +81,12 @@ static const char *TAG = "parchment";
 #define BAR_BORDER      2
 #define LEVEL_MAX       10
 #define BAR_REGION_H    (BAR_H + 10)
+
+/* 文本渲染示例区域 */
+#define TEXT_DEMO_X     30
+#define TEXT_DEMO_Y     840
+#define TEXT_DEMO_W     (UI_SCREEN_WIDTH - 60)
+#define TEXT_DEMO_H     100
 
 /* ---- 状态变量 ---- */
 static bool s_buttons[BTN_COUNT];
@@ -158,17 +186,27 @@ static void draw_button(uint8_t *fb, int idx) {
         ui_canvas_draw_rect(fb, bx, by, bw, bh, UI_COLOR_BLACK, BTN_BORDER);
     }
 
-    /* 在中心画一个小菱形标识（区分各按钮） */
-    int cx = bx + bw / 2;
-    int cy = by + bh / 2;
-    int mark = 12 + idx * 4;
-    uint8_t mark_color = s_buttons[idx] ? UI_COLOR_WHITE : UI_COLOR_BLACK;
-    /* 菱形：用水平线绘制 */
-    for (int i = 0; i <= mark; i++) {
-        int half = (i * mark) / mark;
-        if (half > 0) {
-            ui_canvas_draw_hline(fb, cx - half, cy - mark + i, 2 * half + 1, mark_color);
-            ui_canvas_draw_hline(fb, cx - half, cy + mark - i, 2 * half + 1, mark_color);
+    /* 按钮标签 */
+    uint8_t label_color = s_buttons[idx] ? UI_COLOR_WHITE : UI_COLOR_BLACK;
+    if (s_font_btn) {
+        /* 使用文字标签 */
+        char label[16];
+        snprintf(label, sizeof(label), "BTN %d", idx + 1);
+        int tw = ui_text_measure_width(s_font_btn, label);
+        int tx = bx + (bw - tw) / 2;
+        int ty = by + (bh - ui_font_line_height(s_font_btn)) / 2;
+        ui_text_draw_line(fb, s_font_btn, tx, ty, label, label_color);
+    } else {
+        /* 无字体时回退：画菱形标识 */
+        int cx = bx + bw / 2;
+        int cy = by + bh / 2;
+        int mark = 12 + idx * 4;
+        for (int i = 0; i <= mark; i++) {
+            int half = (i * mark) / mark;
+            if (half > 0) {
+                ui_canvas_draw_hline(fb, cx - half, cy - mark + i, 2 * half + 1, label_color);
+                ui_canvas_draw_hline(fb, cx - half, cy + mark - i, 2 * half + 1, label_color);
+            }
         }
     }
 }
@@ -222,8 +260,30 @@ static void draw_progress_bar(uint8_t *fb) {
 
 /* ---- 绘制全部元素 ---- */
 
+static void draw_text_demo(uint8_t *fb) {
+    if (!s_font_body) return;
+
+    ui_canvas_fill_rect(fb, TEXT_DEMO_X, TEXT_DEMO_Y, TEXT_DEMO_W, TEXT_DEMO_H, UI_COLOR_WHITE);
+
+    ui_text_draw_wrapped(fb, s_font_body,
+                         TEXT_DEMO_X, TEXT_DEMO_Y, TEXT_DEMO_W, TEXT_DEMO_H,
+                         "Parchment is an E-Ink e-reader built on ESP32-S3. "
+                         "It features a 4.7\" display with 16-level grayscale, "
+                         "touch input, and this text rendering engine with "
+                         "anti-aliased TrueType fonts and automatic line wrapping.",
+                         UI_COLOR_BLACK, UI_TEXT_ALIGN_LEFT, 2);
+}
+
 static void draw_all(uint8_t *fb) {
     ui_canvas_fill(fb, UI_COLOR_WHITE);
+
+    /* 标题文字 */
+    if (s_font_title) {
+        const char *title = "Parchment";
+        int tw = ui_text_measure_width(s_font_title, title);
+        int tx = (UI_SCREEN_WIDTH - tw) / 2;
+        ui_text_draw_line(fb, s_font_title, tx, 16, title, UI_COLOR_BLACK);
+    }
 
     /* 顶部分隔线 */
     ui_canvas_draw_hline(fb, 30, 60, UI_SCREEN_WIDTH - 60, UI_COLOR_MEDIUM);
@@ -246,13 +306,11 @@ static void draw_all(uint8_t *fb) {
     /* 进度条 */
     draw_progress_bar(fb);
 
-    /* 底部提示区域：画一个长按图标 (双层同心矩形) */
-    int hint_cx = UI_SCREEN_WIDTH / 2;
-    int hint_cy = 880;
-    ui_canvas_draw_rect(fb, hint_cx - 30, hint_cy - 20, 60, 40, UI_COLOR_MEDIUM, 2);
-    ui_canvas_draw_rect(fb, hint_cx - 20, hint_cy - 12, 40, 24, UI_COLOR_MEDIUM, 1);
-    /* 内部小实心方块 */
-    ui_canvas_fill_rect(fb, hint_cx - 6, hint_cy - 6, 12, 12, UI_COLOR_MEDIUM);
+    /* 进度条与文本区域之间分隔线 */
+    ui_canvas_draw_hline(fb, 30, 830, UI_SCREEN_WIDTH - 60, UI_COLOR_MEDIUM);
+
+    /* 文本渲染示例区域 */
+    draw_text_demo(fb);
 }
 
 /* ---- 页面回调 ---- */
@@ -373,23 +431,23 @@ static ui_page_t test_page = {
 
 void app_main(void) {
     ESP_LOGI(TAG, "========================================");
-    ESP_LOGI(TAG, "  Parchment E-Reader v0.2");
+    ESP_LOGI(TAG, "  Parchment E-Reader v0.3");
     ESP_LOGI(TAG, "  M5Stack PaperS3 (ESP32-S3)");
     ESP_LOGI(TAG, "========================================");
 
     /* 1. 板级初始化 */
-    ESP_LOGI(TAG, "[1/5] Board init...");
+    ESP_LOGI(TAG, "[1/6] Board init...");
     board_init();
 
     /* 2. EPD 显示初始化 */
-    ESP_LOGI(TAG, "[2/5] EPD init...");
+    ESP_LOGI(TAG, "[2/6] EPD init...");
     if (epd_driver_init() != ESP_OK) {
         ESP_LOGE(TAG, "EPD init failed!");
         return;
     }
 
     /* 3. GT911 触摸初始化 */
-    ESP_LOGI(TAG, "[3/5] Touch init...");
+    ESP_LOGI(TAG, "[3/6] Touch init...");
     gt911_config_t touch_cfg = {
         .sda_gpio = BOARD_TOUCH_SDA,
         .scl_gpio = BOARD_TOUCH_SCL,
@@ -403,7 +461,7 @@ void app_main(void) {
     }
 
     /* 4. SD 卡挂载 */
-    ESP_LOGI(TAG, "[4/5] SD card mount...");
+    ESP_LOGI(TAG, "[4/6] SD card mount...");
     sd_storage_config_t sd_cfg = {
         .miso_gpio = BOARD_SD_MISO,
         .mosi_gpio = BOARD_SD_MOSI,
@@ -414,8 +472,38 @@ void app_main(void) {
         ESP_LOGW(TAG, "SD card not available");
     }
 
-    /* 5. UI 框架初始化 + 启动 */
-    ESP_LOGI(TAG, "[5/5] UI init...");
+    /* 5. 加载字体 */
+    ESP_LOGI(TAG, "[5/6] Loading fonts...");
+    {
+        const char *font_path = NULL;
+        for (int i = 0; s_font_search_paths[i] != NULL; i++) {
+            FILE *f = fopen(s_font_search_paths[i], "rb");
+            if (f) {
+                fclose(f);
+                font_path = s_font_search_paths[i];
+                break;
+            }
+        }
+
+        if (font_path) {
+            ESP_LOGI(TAG, "Font found: %s", font_path);
+            s_font_title = ui_font_load_file(font_path, 32.0f);
+            s_font_body  = ui_font_load_file(font_path, 22.0f);
+            s_font_btn   = ui_font_load_file(font_path, 18.0f);
+
+            if (s_font_title && s_font_body && s_font_btn) {
+                ESP_LOGI(TAG, "Fonts loaded: title=%dpx body=%dpx btn=%dpx",
+                         ui_font_line_height(s_font_title),
+                         ui_font_line_height(s_font_body),
+                         ui_font_line_height(s_font_btn));
+            }
+        } else {
+            ESP_LOGW(TAG, "No font file found, text rendering disabled");
+        }
+    }
+
+    /* 6. UI 框架初始化 + 启动 */
+    ESP_LOGI(TAG, "[6/6] UI init...");
     ui_core_init();
     ui_touch_start(BOARD_TOUCH_INT);
     ui_page_push(&test_page, NULL);

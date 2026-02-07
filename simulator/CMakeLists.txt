@@ -32,6 +32,12 @@ set(UI_CORE_SOURCES
     ${UI_CORE_DIR}/ui_core.c
 )
 
+# Reuse ui_text sources
+set(UI_TEXT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../components/ui_text)
+set(UI_TEXT_SOURCES
+    ${UI_TEXT_DIR}/ui_text.c
+)
+
 # Application main (provides app_main and test page)
 set(APP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/main.c
@@ -43,6 +49,7 @@ set(APP_SOURCES
 add_executable(parchment_sim
     ${SIM_SOURCES}
     ${UI_CORE_SOURCES}
+    ${UI_TEXT_SOURCES}
     ${APP_SOURCES}
 )
 
@@ -55,6 +62,8 @@ target_include_directories(parchment_sim PRIVATE
 
     # 2. Component include directories
     ${UI_CORE_DIR}/include
+    ${UI_TEXT_DIR}/include
+    ${UI_TEXT_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/epd_driver/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/gt911/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/sd_storage/include
@@ -72,6 +81,7 @@ target_include_directories(parchment_sim PRIVATE
 target_link_libraries(parchment_sim PRIVATE
     ${SDL2_LIBRARIES}
     pthread
+    m
 )
 
 target_compile_options(parchment_sim PRIVATE
