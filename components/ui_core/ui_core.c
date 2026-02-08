@@ -27,18 +27,7 @@ static void ui_loop_task(void *arg) {
     ESP_LOGI(TAG, "UI main loop started");
 
     for (;;) {
-        /* 阻塞等待事件 */
-        esp_err_t ret = ui_event_receive(&event, UI_LOOP_TIMEOUT_MS);
-
-        if (ret == ESP_OK) {
-            /* 分发事件给当前页面 */
-            ui_page_t *page = ui_page_current();
-            if (page != NULL && page->on_event != NULL) {
-                page->on_event(&event);
-            }
-        }
-
-        /* 如果有脏区域，执行渲染 */
+        /* 先检查脏区域并渲染（确保启动时立即刷新） */
         if (ui_render_is_dirty()) {
             ui_page_t *page = ui_page_current();
             if (page != NULL && page->on_render != NULL) {
@@ -48,6 +37,17 @@ static void ui_loop_task(void *arg) {
                 }
             }
             ui_render_flush();
+        }
+
+        /* 阻塞等待事件 */
+        esp_err_t ret = ui_event_receive(&event, UI_LOOP_TIMEOUT_MS);
+
+        if (ret == ESP_OK) {
+            /* 分发事件给当前页面 */
+            ui_page_t *page = ui_page_current();
+            if (page != NULL && page->on_event != NULL) {
+                page->on_event(&event);
+            }
         }
     }
 }
