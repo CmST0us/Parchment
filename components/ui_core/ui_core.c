@@ -40,6 +40,9 @@ static void ui_loop_task(void *arg) {
 
         /* 如果有脏区域，执行渲染 */
         if (ui_render_is_dirty()) {
+            /* 若请求了全屏清除，先执行清屏（消除残影），再绘制内容 */
+            ui_render_clear_if_pending();
+
             ui_page_t *page = ui_page_current();
             if (page != NULL && page->on_render != NULL) {
                 uint8_t *fb = epd_driver_get_framebuffer();

@@ -16,5 +16,11 @@ dependencies.lock
 # Cursor
 .cursor/
 
+# Font binaries (generated, too large for git)
+sdcard/fonts/*.bin
+
+# External components (cloned, not checked in)
+components/esp_littlefs/
+
 # macOS
 .DS_Store

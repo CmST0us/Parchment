@@ -21,16 +21,22 @@ static struct {
     int x0, y0, x1, y1;  /**< 包围矩形（逻辑坐标，左上-右下） */
     bool dirty;           /**< 是否有脏区域 */
     bool full_refresh;    /**< 强制全屏刷新 */
+    bool clear_pending;   /**< 渲染前先执行全屏清除 */
 } s_dirty;
 
 void ui_render_init(void) {
     s_dirty.dirty = false;
     s_dirty.full_refresh = false;
+    s_dirty.clear_pending = false;
     s_dirty.x0 = 0;
     s_dirty.y0 = 0;
     s_dirty.x1 = 0;
     s_dirty.y1 = 0;
     ESP_LOGI(TAG, "Render pipeline initialized");
+}
+
+void ui_render_request_clear(void) {
+    s_dirty.clear_pending = true;
 }
 
 void ui_render_mark_dirty(int x, int y, int w, int h) {
@@ -79,6 +85,15 @@ void ui_render_mark_full_dirty(void) {
 
 bool ui_render_is_dirty(void) {
     return s_dirty.dirty;
+}
+
+void ui_render_clear_if_pending(void) {
+    if (!s_dirty.clear_pending) {
+        return;
+    }
+    ESP_LOGI(TAG, "Executing full screen clear (ghosting removal)");
+    epd_driver_clear();
+    s_dirty.clear_pending = false;
 }
 
 void ui_render_flush(void) {

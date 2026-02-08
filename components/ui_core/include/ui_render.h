@@ -39,11 +39,26 @@ void ui_render_mark_dirty(int x, int y, int w, int h);
 void ui_render_mark_full_dirty(void);
 
 /**
+ * @brief 请求在下次渲染前执行全屏清除（消除残影）。
+ *
+ * 会在主循环中 on_render 之前调用 epd_driver_clear()，
+ * 多次闪烁清除屏幕残影，然后再绘制新内容。
+ */
+void ui_render_request_clear(void);
+
+/**
  * @brief 查询是否有待刷新区域。
  *
  * @return true 有脏区域，false 无。
  */
 bool ui_render_is_dirty(void);
+
+/**
+ * @brief 若有待处理的全屏清除请求，立即执行。
+ *
+ * 由主循环在 on_render 之前调用，确保清屏后再绘制内容。
+ */
+void ui_render_clear_if_pending(void);
 
 /**
  * @brief 执行屏幕刷新。

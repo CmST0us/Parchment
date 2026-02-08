@@ -107,6 +107,24 @@ void ui_canvas_draw_vline(uint8_t *fb, int x, int y, int h, uint8_t gray);
  */
 void ui_canvas_draw_bitmap(uint8_t *fb, int x, int y, int w, int h, const uint8_t *bitmap);
 
+/**
+ * @brief 绘制 1-bit packed 位图（透明模式）。
+ *
+ * 将 1-bit packed bitmap 渲染到 4bpp framebuffer。
+ * bit=1 的像素写入指定前景色，bit=0 的像素跳过（保持背景不变）。
+ * bitmap 格式：MSB first，每行 ceil(w/8) 字节对齐。
+ *
+ * @param fb     framebuffer 指针。
+ * @param x      左上角 X 坐标。
+ * @param y      左上角 Y 坐标。
+ * @param w      位图宽度（像素）。
+ * @param h      位图高度（像素）。
+ * @param bitmap 1-bit packed 位图数据。
+ * @param color  前景色灰度值（高 4 位有效）。
+ */
+void ui_canvas_draw_bitmap_1bit(uint8_t *fb, int x, int y, int w, int h,
+                                const uint8_t *bitmap, uint8_t color);
+
 #ifdef __cplusplus
 }
 #endif

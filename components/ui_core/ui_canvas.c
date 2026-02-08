@@ -92,6 +92,36 @@ void ui_canvas_draw_vline(uint8_t *fb, int x, int y, int h, uint8_t gray) {
     ui_canvas_fill_rect(fb, x, y, 1, h, gray);
 }
 
+void ui_canvas_draw_bitmap_1bit(uint8_t *fb, int x, int y, int w, int h,
+                                const uint8_t *bitmap, uint8_t color) {
+    if (fb == NULL || bitmap == NULL || w <= 0 || h <= 0) {
+        return;
+    }
+
+    int row_bytes = (w + 7) / 8;
+
+    for (int by = 0; by < h; by++) {
+        int dy = y + by;
+        if (dy < 0 || dy >= UI_SCREEN_HEIGHT) {
+            continue;
+        }
+
+        const uint8_t *row = bitmap + by * row_bytes;
+
+        for (int bx = 0; bx < w; bx++) {
+            int dx = x + bx;
+            if (dx < 0 || dx >= UI_SCREEN_WIDTH) {
+                continue;
+            }
+
+            /* MSB first: bit 7 = leftmost pixel */
+            if (row[bx / 8] & (0x80 >> (bx % 8))) {
+                fb_set_pixel(fb, dx, dy, color);
+            }
+        }
+    }
+}
+
 void ui_canvas_draw_bitmap(uint8_t *fb, int x, int y, int w, int h, const uint8_t *bitmap) {
     if (fb == NULL || bitmap == NULL || w <= 0 || h <= 0) {
         return;
