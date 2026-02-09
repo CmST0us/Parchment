@@ -39,7 +39,11 @@ esp_err_t epd_driver_init(void) {
     ESP_LOGI(TAG, "Framebuffer allocated at %p", s_framebuffer);
 
     /* 全屏清除，消除上电残影 */
+    ESP_LOGI(TAG, "Calling epd_fullclear...");
+    epd_poweron();
     epd_fullclear(&s_hl_state, 25);
+    epd_poweroff();
+    ESP_LOGI(TAG, "epd_fullclear done");
 
     s_initialized = true;
     ESP_LOGI(TAG, "EPD driver initialized successfully");
@@ -99,7 +103,9 @@ void epd_driver_clear(void) {
     if (!s_initialized) {
         return;
     }
+    epd_poweron();
     epd_fullclear(&s_hl_state, 25);
+    epd_poweroff();
     ESP_LOGI(TAG, "Screen cleared");
 }
 
