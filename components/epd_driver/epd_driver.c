@@ -71,7 +71,7 @@ esp_err_t epd_driver_update_screen(void) {
     }
 
     epd_poweron();
-    enum EpdDrawError err = epd_hl_update_screen(&s_hl_state, MODE_GC16, 25);
+    enum EpdDrawError err = epd_hl_update_screen(&s_hl_state, MODE_GL16, 25);
     epd_poweroff();
 
     if (err != EPD_DRAW_SUCCESS) {
@@ -89,7 +89,7 @@ esp_err_t epd_driver_update_area(int x, int y, int w, int h) {
     EpdRect area = {.x = x, .y = y, .width = w, .height = h};
 
     epd_poweron();
-    enum EpdDrawError err = epd_hl_update_area(&s_hl_state, MODE_GC16, 25, area);
+    enum EpdDrawError err = epd_hl_update_area(&s_hl_state, MODE_DU, 25, area);
     epd_poweroff();
 
     if (err != EPD_DRAW_SUCCESS) {

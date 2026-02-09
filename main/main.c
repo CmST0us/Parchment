@@ -19,6 +19,89 @@
 static const char *TAG = "parchment";
 
 /* ========================================================================== */
+/*  临时验证页面：触摸坐标验证                                                  */
+/* ========================================================================== */
+
+#define CROSS_SIZE 20
+
+static int s_last_x, s_last_y;
+static bool s_has_new_mark;
+static bool s_need_full;
+
+static void touch_test_on_enter(void *arg) {
+    ESP_LOGI(TAG, "Touch test page entered — tap to place cross marks");
+    s_has_new_mark = false;
+    s_need_full = true;
+    ui_render_mark_full_dirty();
+}
+
+static void touch_test_on_event(ui_event_t *event) {
+    if (event->type == UI_EVENT_TOUCH_TAP) {
+        ESP_LOGI(TAG, "Tap at (%d, %d)", event->x, event->y);
+        s_last_x = event->x;
+        s_last_y = event->y;
+        s_has_new_mark = true;
+        /* 只标记 X 标记周围区域为脏 */
+        ui_render_mark_dirty(event->x - CROSS_SIZE - 1, event->y - CROSS_SIZE - 1,
+                             CROSS_SIZE * 2 + 3, CROSS_SIZE * 2 + 3);
+    } else if (event->type == UI_EVENT_TOUCH_LONG_PRESS) {
+        ESP_LOGI(TAG, "Long press — clear all marks");
+        s_has_new_mark = false;
+        s_need_full = true;
+        ui_render_mark_full_dirty();
+    }
+}
+
+static void draw_reference_marks(uint8_t *fb) {
+    int margin = 30;
+    /* 左上 */
+    ui_canvas_draw_hline(fb, 0, margin, margin * 2, UI_COLOR_MEDIUM);
+    ui_canvas_draw_vline(fb, margin, 0, margin * 2, UI_COLOR_MEDIUM);
+    /* 右上 */
+    ui_canvas_draw_hline(fb, UI_SCREEN_WIDTH - margin * 2, margin, margin * 2, UI_COLOR_MEDIUM);
+    ui_canvas_draw_vline(fb, UI_SCREEN_WIDTH - 1 - margin, 0, margin * 2, UI_COLOR_MEDIUM);
+    /* 左下 */
+    ui_canvas_draw_hline(fb, 0, UI_SCREEN_HEIGHT - 1 - margin, margin * 2, UI_COLOR_MEDIUM);
+    ui_canvas_draw_vline(fb, margin, UI_SCREEN_HEIGHT - margin * 2, margin * 2, UI_COLOR_MEDIUM);
+    /* 右下 */
+    ui_canvas_draw_hline(fb, UI_SCREEN_WIDTH - margin * 2, UI_SCREEN_HEIGHT - 1 - margin, margin * 2, UI_COLOR_MEDIUM);
+    ui_canvas_draw_vline(fb, UI_SCREEN_WIDTH - 1 - margin, UI_SCREEN_HEIGHT - margin * 2, margin * 2, UI_COLOR_MEDIUM);
+    /* 中心 */
+    int cx = UI_SCREEN_WIDTH / 2, cy = UI_SCREEN_HEIGHT / 2;
+    ui_canvas_draw_hline(fb, cx - CROSS_SIZE, cy, CROSS_SIZE * 2 + 1, UI_COLOR_MEDIUM);
+    ui_canvas_draw_vline(fb, cx, cy - CROSS_SIZE, CROSS_SIZE * 2 + 1, UI_COLOR_MEDIUM);
+}
+
+static void draw_cross(uint8_t *fb, int mx, int my) {
+    ui_canvas_draw_line(fb, mx - CROSS_SIZE, my - CROSS_SIZE,
+                        mx + CROSS_SIZE, my + CROSS_SIZE, UI_COLOR_BLACK);
+    ui_canvas_draw_line(fb, mx + CROSS_SIZE, my - CROSS_SIZE,
+                        mx - CROSS_SIZE, my + CROSS_SIZE, UI_COLOR_BLACK);
+}
+
+static void touch_test_on_render(uint8_t *fb) {
+    if (s_need_full) {
+        s_need_full = false;
+        ui_canvas_fill(fb, UI_COLOR_WHITE);
+        draw_reference_marks(fb);
+        return;
+    }
+
+    if (s_has_new_mark) {
+        s_has_new_mark = false;
+        draw_cross(fb, s_last_x, s_last_y);
+    }
+}
+
+static ui_page_t touch_test_page = {
+    .name = "touch_test",
+    .on_enter = touch_test_on_enter,
+    .on_exit = NULL,
+    .on_event = touch_test_on_event,
+    .on_render = touch_test_on_render,
+};
+
+/* ========================================================================== */
 /*  app_main                                                                   */
 /* ========================================================================== */
 
@@ -70,6 +153,7 @@ void app_main(void) {
     ESP_LOGI(TAG, "[5/5] UI init...");
     ui_core_init();
     ui_touch_start(BOARD_TOUCH_INT);
+    ui_page_push(&touch_test_page, NULL);
     ui_core_run();
 
     ESP_LOGI(TAG, "========================================");

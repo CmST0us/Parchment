@@ -71,7 +71,7 @@ static int s_int_gpio = -1;  /**< INT 引脚编号 */
  */
 static void touch_to_screen(uint16_t tx, uint16_t ty,
                             int16_t *sx, int16_t *sy) {
-    *sx = (int16_t)(UI_SCREEN_WIDTH - 1 - tx);
+    *sx = (int16_t)tx;
     *sy = (int16_t)ty;
 
     if (*sx < 0) *sx = 0;

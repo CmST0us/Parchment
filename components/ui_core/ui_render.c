@@ -10,6 +10,9 @@
 
 static const char *TAG = "ui_render";
 
+/** 物理 framebuffer 高度（横屏）。 */
+#define FB_PHYS_HEIGHT 540
+
 /** 屏幕总面积（逻辑坐标）。 */
 #define SCREEN_AREA (UI_SCREEN_WIDTH * UI_SCREEN_HEIGHT)
 
@@ -95,9 +98,9 @@ void ui_render_flush(void) {
         ESP_LOGI(TAG, "Full screen refresh");
         epd_driver_update_screen();
     } else {
-        /* 逻辑坐标 → 物理坐标：转置 (x↔y) */
+        /* 逻辑坐标 → 物理坐标：转置 + X翻转 */
         int phys_x = s_dirty.y0;
-        int phys_y = s_dirty.x0;
+        int phys_y = FB_PHYS_HEIGHT - s_dirty.x1;
         int phys_w = h;
         int phys_h = w;
         ESP_LOGI(TAG, "Partial refresh: logical(%d,%d %dx%d) -> phys(%d,%d %dx%d)",

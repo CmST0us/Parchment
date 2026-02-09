@@ -94,6 +94,18 @@ void ui_canvas_draw_hline(uint8_t *fb, int x, int y, int w, uint8_t gray);
 void ui_canvas_draw_vline(uint8_t *fb, int x, int y, int h, uint8_t gray);
 
 /**
+ * @brief 绘制任意方向直线（Bresenham 算法）。
+ *
+ * @param fb   framebuffer 指针。
+ * @param x0   起点 X 坐标。
+ * @param y0   起点 Y 坐标。
+ * @param x1   终点 X 坐标。
+ * @param y1   终点 Y 坐标。
+ * @param gray 灰度值，高 4 位有效。
+ */
+void ui_canvas_draw_line(uint8_t *fb, int x0, int y0, int x1, int y1, uint8_t gray);
+
+/**
  * @brief 绘制 4bpp 灰度位图。
  *
  * bitmap 格式与 framebuffer 一致：每字节 2 像素，高 4 位为左像素。

@@ -56,13 +56,24 @@ idf.py flash monitor
 ### EPD 电源管理
 epdiy 的 `epd_fullclear()`、`epd_hl_update_screen()`、`epd_clear()` 等函数**不会自动管理电源**。调用方必须在这些函数前后显式调用 `epd_poweron()` / `epd_poweroff()`。`epd_driver.c` 封装层已处理此逻辑。
 
+### EPD 刷新模式
+- 全屏刷新: `MODE_GL16`（不闪黑，灰度准确）
+- 局部刷新: `MODE_DU`（不闪黑，单色直接更新，最快）
+- `MODE_GC16` 会闪黑，仅在需要彻底消除残影时使用（如 `epd_fullclear`）
+
+### 显示坐标系
+- 逻辑坐标: 540x960 portrait (x: 0-539 左→右, y: 0-959 上→下)
+- 物理 framebuffer: 960x540 landscape
+- 像素映射: `px = ly, py = (539 - lx)` — 转置 + X翻转
+- 局部刷新物理坐标: `phys_x = y0, phys_y = 540 - x1`
+- 触摸坐标: GT911 直通，无需翻转
+
 ### UI 框架
 - ui_core 使用页面栈模型，通过 `ui_page_push()` 推入页面
 - 页面栈为空时事件循环正常运行但不分发事件
-- 坐标系: 逻辑 540x960 portrait，内部旋转映射到物理 960x540 landscape
 - 帧缓冲区: 4bpp 灰度（每字节 2 像素），位于 PSRAM
+- ui_canvas 绘图原语: pixel, line, hline, vline, rect, fill_rect, fill, bitmap
 
 ### 当前状态
-- 测试页面已移除，main.c 仅包含硬件初始化和 ui_core 启动
-- 无生产页面被 push，准备接入书架/阅读等页面
+- main.c 有临时触摸验证页面（待清理后接入生产页面）
 - `docs/ui-wireframe-spec.md` 定义了 8 个目标页面的线框

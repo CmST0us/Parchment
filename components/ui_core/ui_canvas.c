@@ -17,13 +17,13 @@
 #define FB_PHYS_HEIGHT 540
 
 /**
- * @brief 在 framebuffer 上写入单个像素（含转置映射）。
+ * @brief 在 framebuffer 上写入单个像素（含转置+水平翻转映射）。
  *
- * 逻辑 (lx, ly) → 物理 (px=ly, py=lx)
+ * 逻辑 (lx, ly) → 物理 (px=ly, py=539-lx)
  */
 static inline void fb_set_pixel(uint8_t *fb, int lx, int ly, uint8_t gray) {
     int px = ly;
-    int py = lx;
+    int py = (FB_PHYS_HEIGHT - 1) - lx;
     uint8_t *buf_ptr = &fb[py * (FB_PHYS_WIDTH / 2) + px / 2];
     if (px % 2) {
         *buf_ptr = (*buf_ptr & 0x0F) | (gray & 0xF0);
@@ -90,6 +90,36 @@ void ui_canvas_draw_hline(uint8_t *fb, int x, int y, int w, uint8_t gray) {
 
 void ui_canvas_draw_vline(uint8_t *fb, int x, int y, int h, uint8_t gray) {
     ui_canvas_fill_rect(fb, x, y, 1, h, gray);
+}
+
+void ui_canvas_draw_line(uint8_t *fb, int x0, int y0, int x1, int y1, uint8_t gray) {
+    if (fb == NULL) {
+        return;
+    }
+
+    int dx = x1 > x0 ? x1 - x0 : x0 - x1;
+    int dy = y1 > y0 ? y1 - y0 : y0 - y1;
+    int sx = x0 < x1 ? 1 : -1;
+    int sy = y0 < y1 ? 1 : -1;
+    int err = dx - dy;
+
+    while (1) {
+        if (x0 >= 0 && x0 < UI_SCREEN_WIDTH && y0 >= 0 && y0 < UI_SCREEN_HEIGHT) {
+            fb_set_pixel(fb, x0, y0, gray);
+        }
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+        int e2 = 2 * err;
+        if (e2 > -dy) {
+            err -= dy;
+            x0 += sx;
+        }
+        if (e2 < dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
 }
 
 void ui_canvas_draw_bitmap(uint8_t *fb, int x, int y, int w, int h, const uint8_t *bitmap) {
