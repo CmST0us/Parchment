@@ -5,6 +5,8 @@ idf_component_register(
          "ui_touch.c"
          "ui_render.c"
          "ui_core.c"
-    INCLUDE_DIRS "include"
-    REQUIRES "epd_driver" "gt911"
+         "ui_font.c"
+         "ui_text.c"
+    INCLUDE_DIRS "include" "fonts"
+    REQUIRES "epd_driver" "gt911" "epdiy"
 )

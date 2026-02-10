@@ -11,6 +11,8 @@
 
 #include <stdint.h>
 
+#include "epdiy.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -118,6 +120,53 @@ void ui_canvas_draw_line(uint8_t *fb, int x0, int y0, int x1, int y1, uint8_t gr
  * @param bitmap 位图数据。
  */
 void ui_canvas_draw_bitmap(uint8_t *fb, int x, int y, int w, int h, const uint8_t *bitmap);
+
+/**
+ * @brief 绘制单行文字。
+ *
+ * 在逻辑坐标系下从 (x, y) 基线位置开始渲染一行文字。
+ * 遇到 '\n' 或字符串结束时停止，不处理自动换行。
+ *
+ * @param fb       framebuffer 指针。
+ * @param x        基线起始 X 坐标。
+ * @param y        基线 Y 坐标。
+ * @param font     字体指针（EpdFont）。
+ * @param text     UTF-8 编码的文字字符串。
+ * @param fg_color 前景色（灰度值，高 4 位有效）。
+ */
+void ui_canvas_draw_text(uint8_t *fb, int x, int y,
+                         const EpdFont *font, const char *text,
+                         uint8_t fg_color);
+
+/**
+ * @brief 度量文字渲染后的像素宽度。
+ *
+ * 遍历 UTF-8 字符串累加每个字符的 advance_x，不写入 framebuffer。
+ * 遇到 '\n' 或字符串结束时停止。
+ *
+ * @param font 字体指针。
+ * @param text UTF-8 编码的文字字符串。
+ * @return 文字占用的像素宽度。
+ */
+int ui_canvas_measure_text(const EpdFont *font, const char *text);
+
+/**
+ * @brief 绘制指定字节数的文字（内部用于排版引擎）。
+ *
+ * 最多渲染 max_bytes 字节的文字，不跨越 UTF-8 字符边界。
+ * 遇到 '\n'、'\0' 或字节限制时停止。
+ *
+ * @param fb        framebuffer 指针。
+ * @param x         基线起始 X 坐标。
+ * @param y         基线 Y 坐标。
+ * @param font      字体指针。
+ * @param text      UTF-8 编码文字。
+ * @param max_bytes 最大渲染字节数。
+ * @param fg_color  前景色。
+ */
+void ui_canvas_draw_text_n(uint8_t *fb, int x, int y,
+                           const EpdFont *font, const char *text,
+                           int max_bytes, uint8_t fg_color);
 
 #ifdef __cplusplus
 }
