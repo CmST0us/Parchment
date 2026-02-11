@@ -7,6 +7,7 @@ idf_component_register(
          "ui_core.c"
          "ui_font.c"
          "ui_text.c"
+         "ui_icon.c"
     INCLUDE_DIRS "include" "fonts"
     REQUIRES "epd_driver" "gt911" "epdiy"
 )

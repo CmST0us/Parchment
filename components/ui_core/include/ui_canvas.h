@@ -122,6 +122,25 @@ void ui_canvas_draw_line(uint8_t *fb, int x0, int y0, int x1, int y1, uint8_t gr
 void ui_canvas_draw_bitmap(uint8_t *fb, int x, int y, int w, int h, const uint8_t *bitmap);
 
 /**
+ * @brief 以指定前景色绘制 4bpp alpha 位图。
+ *
+ * bitmap 中每个 4bpp 值作为 alpha（不透明度）：
+ * - 0xF0 = 完全不透明，写入 fg_color
+ * - 0x00 = 完全透明，保留 framebuffer 原值
+ * - 中间值按线性插值混合
+ *
+ * @param fb       framebuffer 指针。
+ * @param x        左上角 X 坐标。
+ * @param y        左上角 Y 坐标。
+ * @param w        位图宽度。
+ * @param h        位图高度。
+ * @param bitmap   4bpp alpha 位图数据。
+ * @param fg_color 前景色（灰度值，高 4 位有效）。
+ */
+void ui_canvas_draw_bitmap_fg(uint8_t *fb, int x, int y, int w, int h,
+                               const uint8_t *bitmap, uint8_t fg_color);
+
+/**
  * @brief 绘制单行文字。
  *
  * 在逻辑坐标系下从 (x, y) 基线位置开始渲染一行文字。

@@ -15,6 +15,7 @@
 #include "gt911.h"
 #include "sd_storage.h"
 #include "ui_core.h"
+#include "ui_event.h"
 #include "ui_font.h"
 #include "ui_text.h"
 

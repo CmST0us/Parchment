@@ -37,6 +37,20 @@ static inline void fb_set_pixel(uint8_t *fb, int lx, int ly, uint8_t gray) {
     }
 }
 
+/**
+ * @brief 从 framebuffer 读取单个像素的灰度值（含转置+水平翻转映射）。
+ */
+static inline uint8_t fb_get_pixel(const uint8_t *fb, int lx, int ly) {
+    int px = ly;
+    int py = (FB_PHYS_HEIGHT - 1) - lx;
+    uint8_t byte_val = fb[py * (FB_PHYS_WIDTH / 2) + px / 2];
+    if (px % 2) {
+        return byte_val & 0xF0;
+    } else {
+        return (byte_val & 0x0F) << 4;
+    }
+}
+
 void ui_canvas_draw_pixel(uint8_t *fb, int x, int y, uint8_t gray) {
     if (fb == NULL || x < 0 || x >= UI_SCREEN_WIDTH || y < 0 || y >= UI_SCREEN_HEIGHT) {
         return;
@@ -154,6 +168,53 @@ void ui_canvas_draw_bitmap(uint8_t *fb, int x, int y, int w, int h, const uint8_
             }
 
             fb_set_pixel(fb, dx, dy, gray_val);
+        }
+    }
+}
+
+void ui_canvas_draw_bitmap_fg(uint8_t *fb, int x, int y, int w, int h,
+                               const uint8_t *bitmap, uint8_t fg_color) {
+    if (fb == NULL || bitmap == NULL || w <= 0 || h <= 0) {
+        return;
+    }
+
+    uint8_t fg4 = fg_color >> 4;  /* 0-15 */
+
+    for (int by = 0; by < h; by++) {
+        int dy = y + by;
+        if (dy < 0 || dy >= UI_SCREEN_HEIGHT) {
+            continue;
+        }
+
+        for (int bx = 0; bx < w; bx++) {
+            int dx = x + bx;
+            if (dx < 0 || dx >= UI_SCREEN_WIDTH) {
+                continue;
+            }
+
+            /* 提取 4bpp alpha 值 */
+            int bmp_idx = by * w + bx;
+            uint8_t bmp_byte = bitmap[bmp_idx / 2];
+            uint8_t alpha;
+            if (bmp_idx % 2) {
+                alpha = bmp_byte >> 4;
+            } else {
+                alpha = bmp_byte & 0x0F;
+            }
+
+            if (alpha == 0) {
+                continue;  /* 完全透明 */
+            }
+
+            if (alpha == 0x0F) {
+                /* 完全不透明，直接写入前景色 */
+                fb_set_pixel(fb, dx, dy, fg_color);
+            } else {
+                /* 线性插值: result = bg + alpha * (fg - bg) / 15 */
+                uint8_t bg4 = fb_get_pixel(fb, dx, dy) >> 4;
+                uint8_t result4 = (uint8_t)(bg4 + (int)(alpha * ((int)fg4 - (int)bg4)) / 15);
+                fb_set_pixel(fb, dx, dy, result4 << 4);
+            }
         }
     }
 }
