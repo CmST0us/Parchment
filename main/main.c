@@ -14,6 +14,7 @@
 #include "epd_driver.h"
 #include "gt911.h"
 #include "sd_storage.h"
+#include "settings_store.h"
 #include "ui_core.h"
 #include "ui_event.h"
 #include "ui_font.h"
@@ -184,6 +185,12 @@ void app_main(void) {
     ESP_LOGI(TAG, "  Parchment E-Reader v0.2");
     ESP_LOGI(TAG, "  M5Stack PaperS3 (ESP32-S3)");
     ESP_LOGI(TAG, "========================================");
+
+    /* 0. NVS 初始化（settings_store 依赖） */
+    ESP_LOGI(TAG, "[0/5] NVS init...");
+    if (settings_store_init() != ESP_OK) {
+        ESP_LOGW(TAG, "NVS init failed, settings unavailable");
+    }
 
     /* 1. 板级初始化 */
     ESP_LOGI(TAG, "[1/5] Board init...");

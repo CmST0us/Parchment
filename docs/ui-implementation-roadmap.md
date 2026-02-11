@@ -33,7 +33,7 @@ icon-resources   widget-components  data-layer
 - widget_header, widget_button, widget_progress, widget_list, widget_separator
 - 依赖 Change 1
 
-### Change 3: `data-layer`
+### Change 3: `data-layer` ✅ 完成 (2026-02-12)
 - `book_store` 组件: SD 卡 TXT 扫描, 书籍列表
 - `settings_store` 组件: NVS 读写用户偏好 + 阅读进度
 - 独立于 Change 1/2, 可并行
