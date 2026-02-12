@@ -17,6 +17,7 @@
 #include "settings_store.h"
 #include "ui_core.h"
 #include "ui_event.h"
+#include "ui_font.h"
 #include "page_boot.h"
 
 static const char *TAG = "parchment";
@@ -32,25 +33,25 @@ void app_main(void) {
     ESP_LOGI(TAG, "========================================");
 
     /* 0. NVS 初始化（settings_store 依赖） */
-    ESP_LOGI(TAG, "[0/5] NVS init...");
+    ESP_LOGI(TAG, "[0/6] NVS init...");
     if (settings_store_init() != ESP_OK) {
         ESP_LOGW(TAG, "NVS init failed, settings unavailable");
     }
 
     /* 1. 板级初始化 */
-    ESP_LOGI(TAG, "[1/5] Board init...");
+    ESP_LOGI(TAG, "[1/6] Board init...");
     board_init();
 
     /* 2. EPD 显示初始化 */
-    ESP_LOGI(TAG, "[2/5] EPD init...");
+    ESP_LOGI(TAG, "[2/6] EPD init...");
     if (epd_driver_init() != ESP_OK) {
         ESP_LOGE(TAG, "EPD init failed!");
         return;
     }
-    ESP_LOGI(TAG, "[2/5] EPD init done, fullclear should have executed");
+    ESP_LOGI(TAG, "[2/6] EPD init done, fullclear should have executed");
 
     /* 3. GT911 触摸初始化 */
-    ESP_LOGI(TAG, "[3/5] Touch init...");
+    ESP_LOGI(TAG, "[3/6] Touch init...");
     gt911_config_t touch_cfg = {
         .sda_gpio = BOARD_TOUCH_SDA,
         .scl_gpio = BOARD_TOUCH_SCL,
@@ -64,7 +65,7 @@ void app_main(void) {
     }
 
     /* 4. SD 卡挂载 */
-    ESP_LOGI(TAG, "[4/5] SD card mount...");
+    ESP_LOGI(TAG, "[4/6] SD card mount...");
     sd_storage_config_t sd_cfg = {
         .miso_gpio = BOARD_SD_MISO,
         .mosi_gpio = BOARD_SD_MOSI,
@@ -75,8 +76,12 @@ void app_main(void) {
         ESP_LOGW(TAG, "SD card not available");
     }
 
-    /* 5. UI 框架初始化 + 启动 */
-    ESP_LOGI(TAG, "[5/5] UI init...");
+    /* 5. 字体子系统初始化（LittleFS 挂载 + 扫描阅读字体） */
+    ESP_LOGI(TAG, "[5/6] Font init...");
+    ui_font_init();
+
+    /* 6. UI 框架初始化 + 启动 */
+    ESP_LOGI(TAG, "[6/6] UI init...");
     ui_core_init();
     ui_touch_start(BOARD_TOUCH_INT);
     ui_page_push(&page_boot, NULL);

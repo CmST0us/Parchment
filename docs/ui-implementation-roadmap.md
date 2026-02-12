@@ -6,8 +6,8 @@
 
 ```
 Change 1         Change 2           Change 3
-icon-resources   widget-components  data-layer
-   │                │                  │
+icon-resources   widget-components  data-layer   font-littlefs
+   │                │                  │          (Phase 1.5)
    └────────┬───────┘                  │
             │                          │
          Change 4                      │
@@ -16,7 +16,7 @@ icon-resources   widget-components  data-layer
             └──────────┬───────────────┘
                        │
                     Change 5
-                    library-screen
+                    library-screen ──── font-littlefs
 ```
 
 ## Phase 1: 基础设施
@@ -37,6 +37,19 @@ icon-resources   widget-components  data-layer
 - `book_store` 组件: SD 卡 TXT 扫描, 书籍列表
 - `settings_store` 组件: NVS 读写用户偏好 + 阅读进度
 - 独立于 Change 1/2, 可并行
+
+## Phase 1.5: 字体系统
+
+### Change: `font-littlefs` ✅ 完成 (2026-02-12)
+- 字体存储从编译内嵌迁移到 LittleFS Flash 分区
+- UI 字体 (20/28px): GB2312 一级 + ASCII (~4667 glyphs), 编译为 ROM .h 文件
+- 阅读字体 (24/32px): GB18030 (~22380 glyphs), 预生成 .pfnt 二进制文件存入 LittleFS
+- 自定义 .pfnt 格式, 运行时加载到 PSRAM
+- `fontconvert.py` 支持 `--charset` (gb2312-1/gbk/gb18030) 和 `--output-format` (header/pfnt)
+- `generate_fonts.sh` 双轨生成: UI .h + 阅读 .pfnt
+- LittleFS 镜像自动集成到 `idf.py build` 流程
+- Flash 分区: factory 3MB + fonts 12.9MB
+- 独立于 Change 1-3, 但阅读功能 (Phase 3) 依赖此变更
 
 ## Phase 2: 页面实现
 
@@ -78,3 +91,6 @@ icon-resources   widget-components  data-layer
 - **页面目录**: `main/pages/`
 - **数据存储**: NVS 存进度和设置, SD 卡存书籍
 - **EPUB**: 延后, 先只支持 TXT
+- **字体存储**: LittleFS Flash 分区 (12.9MB), 编译期预生成 .pfnt 二进制
+- **字体覆盖**: UI 用 GB2312 一级 (ROM), 阅读用 GB18030 (PSRAM)
+- **字体格式**: 自定义 .pfnt (4bpp zlib 压缩位图, 与 epdiy EpdFont 对齐)
