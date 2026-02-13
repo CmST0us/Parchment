@@ -195,12 +195,40 @@ def get_gb18030_points():
     return points
 
 
-def resolve_charset_intervals(charset_name, string_arg, face):
+def _filter_by_font(code_points, font_stack):
+    """过滤掉字体栈中没有 glyph 的码点。"""
+    filtered = []
+    skipped = 0
+    for cp in code_points:
+        found = False
+        for face in font_stack:
+            if face.get_char_index(cp) != 0:
+                found = True
+                break
+        if found:
+            filtered.append(cp)
+        else:
+            skipped += 1
+    if skipped > 0:
+        print(f"  Filtered out {skipped} code points not in font",
+              file=sys.stderr)
+    return filtered
+
+
+def resolve_charset_intervals(charset_name, string_arg, font_stack):
     """根据 --charset 参数解析出 Unicode interval 列表。"""
+    face = font_stack[0]
+
     if charset_name == "custom":
         if string_arg is None:
             # 使用默认的 ASCII + 标点
-            return _COMMON_INTERVALS[:]
+            common_points = set()
+            for start, end in _COMMON_INTERVALS:
+                for cp in range(start, end + 1):
+                    common_points.add(cp)
+            all_points = sorted(common_points)
+            all_points = _filter_by_font(all_points, font_stack)
+            return _code_points_to_intervals(all_points)
         # 从 --string 参数生成 intervals
         string = " " + string_arg
         chars = sorted(set(string))
@@ -235,6 +263,10 @@ def resolve_charset_intervals(charset_name, string_arg, face):
 
     all_points = sorted(common_points | cjk_points)
     print(f"  Total unique code points: {len(all_points)}", file=sys.stderr)
+
+    # 过滤掉字体中没有的码点，防止 interval 偏移错位
+    all_points = _filter_by_font(all_points, font_stack)
+    print(f"  After filtering: {len(all_points)} code points", file=sys.stderr)
 
     return _code_points_to_intervals(all_points)
 
@@ -528,9 +560,9 @@ def main():
     for face in font_stack:
         face.set_char_size(args.size << 6, args.size << 6, 72, 72)
 
-    # 解析字符集
+    # 解析字符集（传入完整字体栈以过滤不支持的码点）
     intervals = resolve_charset_intervals(
-        args.charset, args.string, font_stack[0]
+        args.charset, args.string, font_stack
     )
 
     # 附加 intervals
