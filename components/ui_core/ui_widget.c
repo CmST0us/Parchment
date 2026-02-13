@@ -271,6 +271,231 @@ void ui_widget_list_scroll(ui_list_t *list, int delta_y) {
     }
 }
 
+/* ── Slider ─────────────────────────────────────────────────────── */
+
+void ui_widget_draw_slider(uint8_t *fb, const ui_slider_t *slider) {
+    if (!fb || !slider || slider->max_val <= slider->min_val) {
+        return;
+    }
+
+    int track_h = 4;
+    int track_y = slider->y + (slider->h - track_h) / 2;
+
+    /* 轨道背景 (LIGHT)。 */
+    ui_canvas_fill_rect(fb, slider->x, track_y, slider->w, track_h,
+                        UI_COLOR_LIGHT);
+
+    /* 已填充区域 (BLACK)。 */
+    int range = slider->max_val - slider->min_val;
+    int val = slider->value;
+    if (val < slider->min_val) val = slider->min_val;
+    if (val > slider->max_val) val = slider->max_val;
+    int filled_w = (val - slider->min_val) * slider->w / range;
+    if (filled_w > 0) {
+        ui_canvas_fill_rect(fb, slider->x, track_y, filled_w, track_h,
+                            UI_COLOR_BLACK);
+    }
+
+    /* 把手 (BLACK 矩形)。 */
+    int handle_w = 12;
+    int handle_h = slider->h;
+    int handle_x = slider->x + filled_w - handle_w / 2;
+    if (handle_x < slider->x) handle_x = slider->x;
+    if (handle_x + handle_w > slider->x + slider->w) {
+        handle_x = slider->x + slider->w - handle_w;
+    }
+    ui_canvas_fill_rect(fb, handle_x, slider->y, handle_w, handle_h,
+                        UI_COLOR_BLACK);
+}
+
+int ui_widget_slider_touch(const ui_slider_t *slider, int x, int y) {
+    if (!slider || slider->max_val <= slider->min_val) {
+        return INT_MIN;
+    }
+
+    /* Y 方向 ±20px 扩展触摸区。 */
+    if (y < slider->y - 20 || y > slider->y + slider->h + 20) {
+        return INT_MIN;
+    }
+
+    /* X 方向须在滑块范围内。 */
+    if (x < slider->x || x > slider->x + slider->w) {
+        return INT_MIN;
+    }
+
+    int range = slider->max_val - slider->min_val;
+    int raw = slider->min_val + (x - slider->x) * range / slider->w;
+
+    /* Step 量化。 */
+    if (slider->step > 1) {
+        int offset = raw - slider->min_val;
+        offset = ((offset + slider->step / 2) / slider->step) * slider->step;
+        raw = slider->min_val + offset;
+    }
+
+    if (raw < slider->min_val) raw = slider->min_val;
+    if (raw > slider->max_val) raw = slider->max_val;
+    return raw;
+}
+
+/* ── Selection Group ───────────────────────────────────────────── */
+
+void ui_widget_draw_sel_group(uint8_t *fb, const ui_sel_group_t *group) {
+    if (!fb || !group || group->item_count <= 0 ||
+        group->item_count > UI_SEL_GROUP_MAX_ITEMS) {
+        return;
+    }
+
+    int item_w = group->w / group->item_count;
+    const EpdFont *font = ui_font_get(20);
+
+    for (int i = 0; i < group->item_count; i++) {
+        int ix = group->x + i * item_w;
+        bool selected = (i == group->selected);
+
+        if (selected) {
+            /* 选中: BLACK 底 WHITE 字。 */
+            ui_canvas_fill_rect(fb, ix, group->y, item_w, group->h,
+                                UI_COLOR_BLACK);
+        } else {
+            /* 未选中: WHITE 底 BLACK 字 BLACK 边框。 */
+            ui_canvas_fill_rect(fb, ix, group->y, item_w, group->h,
+                                UI_COLOR_WHITE);
+            ui_canvas_draw_rect(fb, ix, group->y, item_w, group->h,
+                                UI_COLOR_BLACK, 2);
+        }
+
+        /* 文字居中。 */
+        if (group->items[i]) {
+            uint8_t fg = selected ? UI_COLOR_WHITE : UI_COLOR_BLACK;
+            int text_w = ui_canvas_measure_text(font, group->items[i]);
+            int text_x = ix + (item_w - text_w) / 2;
+            int text_y = group->y + (group->h + 20) / 2 - 2;
+            ui_canvas_draw_text(fb, text_x, text_y, font, group->items[i], fg);
+        }
+    }
+}
+
+int ui_widget_sel_group_hit_test(const ui_sel_group_t *group, int x, int y) {
+    if (!group || group->item_count <= 0 ||
+        group->item_count > UI_SEL_GROUP_MAX_ITEMS) {
+        return -1;
+    }
+
+    /* Y 方向 ±20px 扩展触摸区。 */
+    if (y < group->y - 20 || y > group->y + group->h + 20) {
+        return -1;
+    }
+
+    /* X 方向须在组范围内。 */
+    if (x < group->x || x >= group->x + group->w) {
+        return -1;
+    }
+
+    int item_w = group->w / group->item_count;
+    int index = (x - group->x) / item_w;
+    if (index >= group->item_count) {
+        index = group->item_count - 1;
+    }
+    return index;
+}
+
+/* ── Modal Dialog ──────────────────────────────────────────────── */
+
+/** 弹窗面板水平边距。 */
+#define DIALOG_MARGIN_X  24
+/** 弹窗标题栏高度。 */
+#define DIALOG_TITLE_H   48
+/** 弹窗最大高度占屏幕比例 (70%)。 */
+#define DIALOG_MAX_H_PCT 70
+
+void ui_widget_draw_dialog(uint8_t *fb, const ui_dialog_t *dialog) {
+    if (!fb || !dialog || !dialog->visible) {
+        return;
+    }
+
+    /* 全屏 MEDIUM 遮罩。 */
+    ui_canvas_fill_rect(fb, 0, 0, UI_SCREEN_WIDTH, UI_SCREEN_HEIGHT,
+                        UI_COLOR_MEDIUM);
+
+    /* 计算面板尺寸。 */
+    int panel_w = UI_SCREEN_WIDTH - DIALOG_MARGIN_X * 2;
+    int max_h = UI_SCREEN_HEIGHT * DIALOG_MAX_H_PCT / 100;
+    int list_h = dialog->list.item_count * dialog->list.item_height;
+    int panel_h = DIALOG_TITLE_H + list_h;
+    if (panel_h > max_h) {
+        panel_h = max_h;
+    }
+
+    int panel_x = DIALOG_MARGIN_X;
+    int panel_y = (UI_SCREEN_HEIGHT - panel_h) / 2;
+
+    /* WHITE 底面板。 */
+    ui_canvas_fill_rect(fb, panel_x, panel_y, panel_w, panel_h,
+                        UI_COLOR_WHITE);
+    ui_canvas_draw_rect(fb, panel_x, panel_y, panel_w, panel_h,
+                        UI_COLOR_BLACK, 2);
+
+    /* 标题栏。 */
+    if (dialog->title) {
+        const EpdFont *font = ui_font_get(24);
+        int text_w = ui_canvas_measure_text(font, dialog->title);
+        int text_x = panel_x + (panel_w - text_w) / 2;
+        int text_y = panel_y + 36;  /* 基线: (48 + 24) / 2 = 36 */
+        ui_canvas_draw_text(fb, text_x, text_y, font, dialog->title,
+                            UI_COLOR_BLACK);
+    }
+
+    /* 标题栏分隔线。 */
+    ui_canvas_draw_hline(fb, panel_x, panel_y + DIALOG_TITLE_H, panel_w,
+                         UI_COLOR_MEDIUM);
+
+    /* 内嵌列表。 */
+    ui_list_t inner_list = dialog->list;
+    inner_list.x = panel_x;
+    inner_list.y = panel_y + DIALOG_TITLE_H;
+    inner_list.w = panel_w;
+    inner_list.h = panel_h - DIALOG_TITLE_H;
+    ui_widget_draw_list(fb, &inner_list);
+}
+
+int ui_widget_dialog_hit_test(const ui_dialog_t *dialog, int x, int y) {
+    if (!dialog || !dialog->visible) {
+        return UI_DIALOG_HIT_MASK;
+    }
+
+    /* 计算面板区域（与 draw 逻辑一致）。 */
+    int panel_w = UI_SCREEN_WIDTH - DIALOG_MARGIN_X * 2;
+    int max_h = UI_SCREEN_HEIGHT * DIALOG_MAX_H_PCT / 100;
+    int list_h = dialog->list.item_count * dialog->list.item_height;
+    int panel_h = DIALOG_TITLE_H + list_h;
+    if (panel_h > max_h) {
+        panel_h = max_h;
+    }
+
+    int panel_x = DIALOG_MARGIN_X;
+    int panel_y = (UI_SCREEN_HEIGHT - panel_h) / 2;
+
+    /* 在面板外 → 遮罩区域。 */
+    if (x < panel_x || x >= panel_x + panel_w ||
+        y < panel_y || y >= panel_y + panel_h) {
+        return UI_DIALOG_HIT_MASK;
+    }
+
+    /* 在标题栏区域。 */
+    if (y < panel_y + DIALOG_TITLE_H) {
+        return UI_DIALOG_HIT_TITLE;
+    }
+
+    /* 列表区域命中检测。 */
+    ui_list_t inner_list = dialog->list;
+    inner_list.x = panel_x;
+    inner_list.y = panel_y + DIALOG_TITLE_H;
+    inner_list.w = panel_w;
+    inner_list.h = panel_h - DIALOG_TITLE_H;
+    return ui_widget_list_hit_test(&inner_list, x, y);
+}
+
 /* ── Separator ──────────────────────────────────────────────────── */
 
 void ui_widget_draw_separator(uint8_t *fb, int x, int y, int w) {

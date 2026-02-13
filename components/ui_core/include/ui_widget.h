@@ -9,6 +9,7 @@
 #ifndef UI_WIDGET_H
 #define UI_WIDGET_H
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -170,6 +171,110 @@ int ui_widget_list_hit_test(const ui_list_t *list, int x, int y);
  * @param delta_y 滚动增量（正值向下，负值向上）。
  */
 void ui_widget_list_scroll(ui_list_t *list, int delta_y);
+
+/* ── Slider ─────────────────────────────────────────────────────── */
+
+/** Slider 描述结构体。 */
+typedef struct {
+    int x, y, w, h;    /**< 滑块位置和尺寸。 */
+    int min_val;        /**< 最小值。 */
+    int max_val;        /**< 最大值。 */
+    int value;          /**< 当前值。 */
+    int step;           /**< 步进值（0 或 1 表示连续）。 */
+} ui_slider_t;
+
+/**
+ * @brief 绘制水平滑块。
+ *
+ * 轨道 LIGHT 色，已填充区域 BLACK 色，把手 BLACK 色矩形。
+ *
+ * @param fb     framebuffer 指针。
+ * @param slider Slider 描述结构体指针。
+ */
+void ui_widget_draw_slider(uint8_t *fb, const ui_slider_t *slider);
+
+/**
+ * @brief Slider 触摸交互。
+ *
+ * 在 y 方向 ±20px 扩展触摸区内，将 x 坐标映射到 min_val..max_val 值，
+ * 按 step 量化到最近的离散值。
+ *
+ * @param slider Slider 描述结构体指针。
+ * @param x      触摸 X 坐标。
+ * @param y      触摸 Y 坐标。
+ * @return 映射后的值（min_val..max_val），未命中返回 INT_MIN。
+ */
+int ui_widget_slider_touch(const ui_slider_t *slider, int x, int y);
+
+/* ── Selection Group ───────────────────────────────────────────── */
+
+/** Selection group 最大选项数。 */
+#define UI_SEL_GROUP_MAX_ITEMS 4
+
+/** Selection group 描述结构体。 */
+typedef struct {
+    int x, y, w, h;                            /**< 整体位置和尺寸。 */
+    const char *items[UI_SEL_GROUP_MAX_ITEMS];  /**< 选项标签数组。 */
+    int item_count;                             /**< 选项数量（1-4）。 */
+    int selected;                               /**< 当前选中索引（0-based）。 */
+} ui_sel_group_t;
+
+/**
+ * @brief 绘制互斥多选按钮组。
+ *
+ * 水平等分绘制选项。选中项 BLACK 底 WHITE 字，未选中 WHITE 底 BLACK 字 BLACK 边框。
+ *
+ * @param fb    framebuffer 指针。
+ * @param group Selection group 描述结构体指针。
+ */
+void ui_widget_draw_sel_group(uint8_t *fb, const ui_sel_group_t *group);
+
+/**
+ * @brief Selection group 命中检测。
+ *
+ * y 方向 ±20px 扩展触摸区。
+ *
+ * @param group Selection group 描述结构体指针。
+ * @param x     触摸 X 坐标。
+ * @param y     触摸 Y 坐标。
+ * @return 命中的选项索引（0-based），未命中返回 -1。
+ */
+int ui_widget_sel_group_hit_test(const ui_sel_group_t *group, int x, int y);
+
+/* ── Modal Dialog ──────────────────────────────────────────────── */
+
+/** Dialog 命中检测返回值。 */
+#define UI_DIALOG_HIT_TITLE  (-1)  /**< 命中标题栏。 */
+#define UI_DIALOG_HIT_MASK   (-2)  /**< 命中遮罩区域（关闭弹窗）。 */
+
+/** Modal dialog 描述结构体。 */
+typedef struct {
+    const char *title;   /**< 弹窗标题文字。 */
+    ui_list_t list;      /**< 内容区域列表。 */
+    bool visible;        /**< 可见状态。 */
+} ui_dialog_t;
+
+/**
+ * @brief 绘制模态弹窗。
+ *
+ * visible 为 true 时绘制全屏 MEDIUM 遮罩 + 居中 WHITE 内容面板。
+ * 面板包含标题栏和内嵌 list。visible 为 false 时不绘制。
+ *
+ * @param fb     framebuffer 指针。
+ * @param dialog Dialog 描述结构体指针。
+ */
+void ui_widget_draw_dialog(uint8_t *fb, const ui_dialog_t *dialog);
+
+/**
+ * @brief Dialog 命中检测。
+ *
+ * @param dialog Dialog 描述结构体指针。
+ * @param x      触摸 X 坐标。
+ * @param y      触摸 Y 坐标。
+ * @return list item index（≥0）、UI_DIALOG_HIT_TITLE（-1）或
+ *         UI_DIALOG_HIT_MASK（-2）。
+ */
+int ui_widget_dialog_hit_test(const ui_dialog_t *dialog, int x, int y);
 
 /* ── Separator ──────────────────────────────────────────────────── */
 
