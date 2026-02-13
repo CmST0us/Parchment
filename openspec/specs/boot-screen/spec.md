@@ -23,17 +23,21 @@
 - **WHEN** 无 Logo 位图资源可用
 - **THEN** Logo 区域 SHALL 使用文字占位符或矩形边框表示
 
-### Requirement: 定时自动跳转
-系统 SHALL 在启动画面进入后 2 秒自动跳转到下一页面。
+### Requirement: 启动完成后跳转到书库
+启动画面 SHALL 在初始化完成后自动跳转到书库页面。
 
 跳转 SHALL 通过以下机制实现：
 1. `on_enter` 回调中创建一个 2000ms 的 one-shot FreeRTOS timer
 2. Timer 到期后通过 `ui_event_send()` 发送 `UI_EVENT_TIMER` 事件
-3. `on_event` 回调接收到 `UI_EVENT_TIMER` 后调用 `ui_page_replace()` 导航到下一页面
+3. `on_event` 回调接收到 `UI_EVENT_TIMER` 后调用 `ui_page_replace(&page_library, NULL)` 跳转到书库页面
 
-#### Scenario: 2 秒后跳转
-- **WHEN** `page_boot` 被 push 且 2 秒已过
-- **THEN** 系统 SHALL 通过 `ui_page_replace()` 导航离开启动画面
+#### Scenario: 正常启动跳转
+- **WHEN** 启动画面定时器到期（2 秒）
+- **THEN** 页面 SHALL 调用 `ui_page_replace(&page_library, NULL)` 跳转到书库页面
+
+#### Scenario: 页面替换而非入栈
+- **WHEN** 跳转到书库页面时
+- **THEN** SHALL 使用 `ui_page_replace` 而非 `ui_page_push`，确保启动画面不留在页面栈中
 
 #### Scenario: timer 在页面退出时清理
 - **WHEN** `page_boot` 在 timer 到期前被手动 pop 或 replace

@@ -7,6 +7,7 @@
  */
 
 #include "page_boot.h"
+#include "page_library.h"
 
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
@@ -59,9 +60,8 @@ static void boot_on_exit(void) {
 /** 事件处理：收到 timer 事件后跳转。 */
 static void boot_on_event(ui_event_t *event) {
     if (event->type == UI_EVENT_TIMER) {
-        ESP_LOGI(TAG, "Timer fired, navigating to next page");
-        /* Library 页面未实现前，暂跳回自身。 */
-        ui_page_replace(&page_boot, NULL);
+        ESP_LOGI(TAG, "Timer fired, navigating to library");
+        ui_page_replace(&page_library, NULL);
     }
 }
 
