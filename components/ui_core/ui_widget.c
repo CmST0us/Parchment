@@ -496,6 +496,73 @@ int ui_widget_dialog_hit_test(const ui_dialog_t *dialog, int x, int y) {
     return ui_widget_list_hit_test(&inner_list, x, y);
 }
 
+/* ── Dropdown ──────────────────────────────────────────────────── */
+
+void ui_widget_draw_dropdown(uint8_t *fb, const ui_dropdown_t *dropdown) {
+    if (!fb || !dropdown || !dropdown->visible) {
+        return;
+    }
+
+    int panel_w = dropdown->w;
+    int panel_h = dropdown->list.item_count * dropdown->list.item_height;
+    int panel_x = dropdown->anchor_x - panel_w;
+    int panel_y = dropdown->anchor_y;
+
+    /* Clamp 到屏幕范围。 */
+    if (panel_x < 0) {
+        panel_x = 0;
+    }
+    if (panel_y + panel_h > UI_SCREEN_HEIGHT) {
+        panel_h = UI_SCREEN_HEIGHT - panel_y;
+    }
+
+    /* WHITE 底面板 + BLACK 边框。 */
+    ui_canvas_fill_rect(fb, panel_x, panel_y, panel_w, panel_h,
+                        UI_COLOR_WHITE);
+    ui_canvas_draw_rect(fb, panel_x, panel_y, panel_w, panel_h,
+                        UI_COLOR_BLACK, 2);
+
+    /* 内嵌列表。 */
+    ui_list_t inner_list = dropdown->list;
+    inner_list.x = panel_x;
+    inner_list.y = panel_y;
+    inner_list.w = panel_w;
+    inner_list.h = panel_h;
+    ui_widget_draw_list(fb, &inner_list);
+}
+
+int ui_widget_dropdown_hit_test(const ui_dropdown_t *dropdown, int x, int y) {
+    if (!dropdown || !dropdown->visible) {
+        return UI_DROPDOWN_HIT_OUTSIDE;
+    }
+
+    int panel_w = dropdown->w;
+    int panel_h = dropdown->list.item_count * dropdown->list.item_height;
+    int panel_x = dropdown->anchor_x - panel_w;
+    int panel_y = dropdown->anchor_y;
+
+    if (panel_x < 0) {
+        panel_x = 0;
+    }
+    if (panel_y + panel_h > UI_SCREEN_HEIGHT) {
+        panel_h = UI_SCREEN_HEIGHT - panel_y;
+    }
+
+    /* 在面板外。 */
+    if (x < panel_x || x >= panel_x + panel_w ||
+        y < panel_y || y >= panel_y + panel_h) {
+        return UI_DROPDOWN_HIT_OUTSIDE;
+    }
+
+    /* 列表区域命中检测。 */
+    ui_list_t inner_list = dropdown->list;
+    inner_list.x = panel_x;
+    inner_list.y = panel_y;
+    inner_list.w = panel_w;
+    inner_list.h = panel_h;
+    return ui_widget_list_hit_test(&inner_list, x, y);
+}
+
 /* ── Separator ──────────────────────────────────────────────────── */
 
 void ui_widget_draw_separator(uint8_t *fb, int x, int y, int w) {

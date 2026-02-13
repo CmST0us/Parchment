@@ -64,8 +64,8 @@ static ui_header_t s_header;
 /** 书目列表 Widget。 */
 static ui_list_t s_book_list;
 
-/** 排序弹窗 Widget。 */
-static ui_dialog_t s_sort_dialog;
+/** 排序下拉菜单 Widget。 */
+static ui_dropdown_t s_sort_dropdown;
 
 /* ── 前向声明 ─────────────────────────────────────────────────── */
 
@@ -259,9 +259,11 @@ static void library_on_enter(void *arg) {
         .draw_item = draw_book_item,
     };
 
-    /* 初始化排序弹窗（不可见）。 */
-    s_sort_dialog = (ui_dialog_t){
-        .title = "排序方式",
+    /* 初始化排序下拉菜单（不可见）。 */
+    s_sort_dropdown = (ui_dropdown_t){
+        .anchor_x = UI_SCREEN_WIDTH - 16,
+        .anchor_y = HEADER_H + SUBHEADER_H,
+        .w = 200,
         .list = {
             .item_height = 48,
             .item_count = SORT_OPTION_COUNT,
@@ -281,22 +283,21 @@ static void library_on_exit(void) {
 
 /** 事件处理。 */
 static void library_on_event(ui_event_t *event) {
-    /* 排序弹窗可见时，优先处理弹窗事件。 */
-    if (s_sort_dialog.visible) {
+    /* 排序下拉菜单可见时，优先处理菜单事件。 */
+    if (s_sort_dropdown.visible) {
         if (event->type == UI_EVENT_TOUCH_TAP) {
-            int hit = ui_widget_dialog_hit_test(&s_sort_dialog,
-                                                event->x, event->y);
+            int hit = ui_widget_dropdown_hit_test(&s_sort_dropdown,
+                                                   event->x, event->y);
             if (hit >= 0 && hit < SORT_OPTION_COUNT) {
                 /* 选择排序方式。 */
                 ESP_LOGI(TAG, "Sort selected: %s", s_sort_labels[hit]);
-                s_sort_dialog.visible = false;
+                s_sort_dropdown.visible = false;
                 apply_sort((uint8_t)hit);
-            } else if (hit == UI_DIALOG_HIT_MASK) {
-                /* 点击遮罩关闭弹窗。 */
-                s_sort_dialog.visible = false;
+            } else {
+                /* 点击下拉框外部，关闭菜单。 */
+                s_sort_dropdown.visible = false;
                 ui_render_mark_full_dirty();
             }
-            /* UI_DIALOG_HIT_TITLE: 忽略。 */
         }
         return;
     }
@@ -317,8 +318,8 @@ static void library_on_event(ui_event_t *event) {
 
         /* Subheader 排序区域命中。 */
         if (handle_subheader_tap(event->x, event->y)) {
-            ESP_LOGI(TAG, "Sort button tapped, showing dialog");
-            s_sort_dialog.visible = true;
+            ESP_LOGI(TAG, "Sort button tapped, showing dropdown");
+            s_sort_dropdown.visible = true;
             ui_render_mark_full_dirty();
             return;
         }
@@ -379,8 +380,8 @@ static void library_on_render(uint8_t *fb) {
                             UI_COLOR_MEDIUM);
     }
 
-    /* 排序弹窗（如果可见）。 */
-    ui_widget_draw_dialog(fb, &s_sort_dialog);
+    /* 排序下拉菜单（如果可见）。 */
+    ui_widget_draw_dropdown(fb, &s_sort_dropdown);
 }
 
 /** 书库列表页面实例。 */

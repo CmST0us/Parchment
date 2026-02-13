@@ -276,6 +276,41 @@ void ui_widget_draw_dialog(uint8_t *fb, const ui_dialog_t *dialog);
  */
 int ui_widget_dialog_hit_test(const ui_dialog_t *dialog, int x, int y);
 
+/* ── Dropdown ──────────────────────────────────────────────────── */
+
+/** Dropdown 命中检测: 点击在下拉框外部。 */
+#define UI_DROPDOWN_HIT_OUTSIDE  (-1)
+
+/** Dropdown 描述结构体。 */
+typedef struct {
+    int anchor_x;            /**< 锚点 X（下拉框右边缘对齐此值）。 */
+    int anchor_y;            /**< 锚点 Y（下拉框顶部从此值开始）。 */
+    int w;                   /**< 下拉框宽度。 */
+    ui_list_t list;          /**< 内容区域列表。 */
+    bool visible;            /**< 可见状态。 */
+} ui_dropdown_t;
+
+/**
+ * @brief 绘制下拉菜单。
+ *
+ * visible 为 true 时在 (anchor_x - w, anchor_y) 处绘制 WHITE 底 BLACK 边框
+ * 面板，包含内嵌 list。visible 为 false 时不绘制。
+ *
+ * @param fb       framebuffer 指针。
+ * @param dropdown Dropdown 描述结构体指针。
+ */
+void ui_widget_draw_dropdown(uint8_t *fb, const ui_dropdown_t *dropdown);
+
+/**
+ * @brief Dropdown 命中检测。
+ *
+ * @param dropdown Dropdown 描述结构体指针。
+ * @param x        触摸 X 坐标。
+ * @param y        触摸 Y 坐标。
+ * @return list item index（≥0）或 UI_DROPDOWN_HIT_OUTSIDE（-1）。
+ */
+int ui_widget_dropdown_hit_test(const ui_dropdown_t *dropdown, int x, int y);
+
 /* ── Separator ──────────────────────────────────────────────────── */
 
 /**
