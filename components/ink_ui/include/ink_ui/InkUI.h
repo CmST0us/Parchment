@@ -18,3 +18,12 @@
 #include "ink_ui/core/ViewController.h"
 #include "ink_ui/core/NavigationController.h"
 #include "ink_ui/core/Application.h"
+
+// Views (widget 组件)
+#include "ink_ui/views/TextLabel.h"
+#include "ink_ui/views/IconView.h"
+#include "ink_ui/views/ButtonView.h"
+#include "ink_ui/views/HeaderView.h"
+#include "ink_ui/views/ProgressBarView.h"
+#include "ink_ui/views/SeparatorView.h"
+#include "ink_ui/views/PageIndicatorView.h"

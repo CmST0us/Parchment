@@ -12,6 +12,13 @@ set(INK_UI_SRCS
     "src/core/ViewController.cpp"
     "src/core/NavigationController.cpp"
     "src/core/Application.cpp"
+    "src/views/TextLabel.cpp"
+    "src/views/IconView.cpp"
+    "src/views/ButtonView.cpp"
+    "src/views/HeaderView.cpp"
+    "src/views/ProgressBarView.cpp"
+    "src/views/SeparatorView.cpp"
+    "src/views/PageIndicatorView.cpp"
 )
 
 idf_component_register(
