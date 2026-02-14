@@ -47,13 +47,17 @@ bool EpdDriver::updateArea(const Rect& physicalArea, EpdMode mode) {
         return false;
     }
 
-    // epd_driver_update_area 内部使用 MODE_DU 硬编码，
-    // 这里需要直接调用 epdiy 底层 API 以支持不同模式。
-    // 暂时通过现有 C 接口，仅支持 DU 局部刷新。
-    // TODO: 阶段 1 中 RenderEngine 会直接调用 epdiy HL API 支持多模式。
-    (void)mode;
-    return epd_driver_update_area(physicalArea.x, physicalArea.y,
-                                  physicalArea.w, physicalArea.h) == ESP_OK;
+    int epdiyMode;
+    switch (mode) {
+        case EpdMode::DU:   epdiyMode = static_cast<int>(EpdMode::DU);   break;
+        case EpdMode::GC16: epdiyMode = static_cast<int>(EpdMode::GC16); break;
+        case EpdMode::GL16: epdiyMode = static_cast<int>(EpdMode::GL16); break;
+        default:            epdiyMode = static_cast<int>(EpdMode::GL16); break;
+    }
+
+    return epd_driver_update_area_mode(physicalArea.x, physicalArea.y,
+                                        physicalArea.w, physicalArea.h,
+                                        epdiyMode) == ESP_OK;
 }
 
 void EpdDriver::fullClear() {

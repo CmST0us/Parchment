@@ -6,12 +6,18 @@ set(INK_UI_SRCS
     "src/core/EpdDriver.cpp"
     "src/core/Canvas.cpp"
     "src/core/View.cpp"
+    "src/core/FlexLayout.cpp"
+    "src/core/RenderEngine.cpp"
+    "src/core/GestureRecognizer.cpp"
+    "src/core/ViewController.cpp"
+    "src/core/NavigationController.cpp"
+    "src/core/Application.cpp"
 )
 
 idf_component_register(
     SRCS ${INK_UI_SRCS}
     INCLUDE_DIRS "include"
-    REQUIRES epd_driver epdiy
+    REQUIRES epd_driver epdiy gt911
 )
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)

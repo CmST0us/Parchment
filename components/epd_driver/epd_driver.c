@@ -82,6 +82,10 @@ esp_err_t epd_driver_update_screen(void) {
 }
 
 esp_err_t epd_driver_update_area(int x, int y, int w, int h) {
+    return epd_driver_update_area_mode(x, y, w, h, MODE_DU);
+}
+
+esp_err_t epd_driver_update_area_mode(int x, int y, int w, int h, int mode) {
     if (!s_initialized) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -89,7 +93,7 @@ esp_err_t epd_driver_update_area(int x, int y, int w, int h) {
     EpdRect area = {.x = x, .y = y, .width = w, .height = h};
 
     epd_poweron();
-    enum EpdDrawError err = epd_hl_update_area(&s_hl_state, MODE_DU, 25, area);
+    enum EpdDrawError err = epd_hl_update_area(&s_hl_state, (enum EpdDrawMode)mode, 25, area);
     epd_poweroff();
 
     if (err != EPD_DRAW_SUCCESS) {

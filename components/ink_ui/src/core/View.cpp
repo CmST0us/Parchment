@@ -137,11 +137,11 @@ void View::onDraw(Canvas& /*canvas*/) {
 }
 
 void View::onLayout() {
-    // FlexLayout 实现后填充
+    flexLayout(this);
 }
 
 Size View::intrinsicSize() const {
-    return {0, 0};
+    return {-1, -1};
 }
 
 } // namespace ink

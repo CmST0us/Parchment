@@ -52,7 +52,7 @@ uint8_t *epd_driver_get_framebuffer(void);
 esp_err_t epd_driver_update_screen(void);
 
 /**
- * @brief 局部刷新指定区域。
+ * @brief 局部刷新指定区域（MODE_DU）。
  *
  * @param x      区域左上角 X 坐标。
  * @param y      区域左上角 Y 坐标。
@@ -61,6 +61,18 @@ esp_err_t epd_driver_update_screen(void);
  * @return ESP_OK 成功。
  */
 esp_err_t epd_driver_update_area(int x, int y, int w, int h);
+
+/**
+ * @brief 局部刷新指定区域（指定 epdiy 刷新模式）。
+ *
+ * @param x      区域左上角 X 坐标（物理坐标）。
+ * @param y      区域左上角 Y 坐标（物理坐标）。
+ * @param w      区域宽度。
+ * @param h      区域高度。
+ * @param mode   epdiy 刷新模式（MODE_DU / MODE_GL16 / MODE_GC16 等）。
+ * @return ESP_OK 成功。
+ */
+esp_err_t epd_driver_update_area_mode(int x, int y, int w, int h, int mode);
 
 /**
  * @brief 全屏清除为白色。

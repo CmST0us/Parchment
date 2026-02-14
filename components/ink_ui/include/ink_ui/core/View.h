@@ -106,10 +106,10 @@ public:
     /// 绘制自身内容（子类覆写）
     virtual void onDraw(Canvas& canvas);
 
-    /// 布局子 View（FlexLayout 实现后填充，默认为空）
+    /// 布局子 View（默认调用 flexLayout(this) 执行 FlexBox 布局）
     virtual void onLayout();
 
-    /// 返回 View 的固有尺寸（用于布局计算，默认返回 {0, 0}）
+    /// 返回 View 的固有尺寸（用于布局计算，默认返回 {-1, -1} 表示无固有尺寸）
     virtual Size intrinsicSize() const;
 
     // ── 可配置属性 ──

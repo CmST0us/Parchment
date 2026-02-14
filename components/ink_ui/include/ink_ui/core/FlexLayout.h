@@ -1,6 +1,6 @@
 /**
  * @file FlexLayout.h
- * @brief FlexBox 布局类型定义（仅类型，算法在后续 change 中实现）。
+ * @brief FlexBox 布局类型定义和算法声明。
  */
 
 #pragma once
@@ -36,10 +36,15 @@ enum class Justify {
 /// FlexBox 容器样式
 struct FlexStyle {
     FlexDirection direction = FlexDirection::Column;
-    Align alignItems = Align::Start;
+    Align alignItems = Align::Stretch;
     Justify justifyContent = Justify::Start;
     int gap = 0;            ///< 子 View 之间的间距
     Insets padding = {};    ///< 内边距
 };
+
+class View;  // forward declaration
+
+/// 对 container 的可见子 View 执行 FlexBox 布局算法
+void flexLayout(View* container);
 
 } // namespace ink
