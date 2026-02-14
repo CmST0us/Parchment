@@ -7,6 +7,7 @@
  */
 
 #include <cstdio>
+#include <memory>
 
 extern "C" {
 #include "freertos/FreeRTOS.h"
@@ -176,6 +177,139 @@ extern "C" void app_main(void) {
 
         // 等待 5 秒查看结果，然后继续启动旧 ui_core
         vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  InkUI View 验证 (阶段 2)
+    // ═══════════════════════════════════════════════════════════════
+    {
+        ESP_LOGI(TAG, "=== View Test Begin ===");
+
+        // --- 7.1 树操作测试 ---
+        auto root = std::make_unique<ink::View>();
+        root->setFrame({0, 0, 540, 960});
+
+        auto childA = std::make_unique<ink::View>();
+        childA->setFrame({10, 10, 200, 100});
+        auto childB = std::make_unique<ink::View>();
+        childB->setFrame({10, 120, 200, 100});
+        auto childC = std::make_unique<ink::View>();
+        childC->setFrame({10, 230, 200, 100});
+
+        ink::View* ptrA = childA.get();
+        ink::View* ptrB = childB.get();
+        ink::View* ptrC = childC.get();
+
+        root->addSubview(std::move(childA));
+        root->addSubview(std::move(childB));
+        root->addSubview(std::move(childC));
+
+        bool treeOk = (root->subviews().size() == 3)
+                    && (ptrA->parent() == root.get())
+                    && (ptrB->parent() == root.get())
+                    && (ptrC->parent() == root.get());
+        ESP_LOGI(TAG, "7.1 Tree ops: %s (3 children, parent correct)",
+                 treeOk ? "PASS" : "FAIL");
+
+        // removeFromParent
+        auto detachedB = ptrB->removeFromParent();
+        bool removeOk = (root->subviews().size() == 2)
+                      && (detachedB.get() == ptrB)
+                      && (ptrB->parent() == nullptr);
+        ESP_LOGI(TAG, "7.1 removeFromParent: %s", removeOk ? "PASS" : "FAIL");
+
+        // re-add then clearSubviews
+        root->addSubview(std::move(detachedB));
+        root->clearSubviews();
+        bool clearOk = root->subviews().empty();
+        ESP_LOGI(TAG, "7.1 clearSubviews: %s", clearOk ? "PASS" : "FAIL");
+
+        // --- 7.2 脏标记冒泡测试 ---
+        auto root2 = std::make_unique<ink::View>();
+        root2->setFrame({0, 0, 540, 960});
+        root2->clearDirtyFlags();
+
+        auto panel = std::make_unique<ink::View>();
+        panel->setFrame({0, 0, 540, 480});
+        panel->clearDirtyFlags();
+
+        auto button = std::make_unique<ink::View>();
+        button->setFrame({20, 20, 100, 40});
+        button->clearDirtyFlags();
+
+        ink::View* pPanel = panel.get();
+        ink::View* pButton = button.get();
+
+        panel->addSubview(std::move(button));
+        root2->addSubview(std::move(panel));
+
+        // 清除 addSubview 触发的脏标记
+        root2->clearDirtyFlags();
+        pPanel->clearDirtyFlags();
+        pButton->clearDirtyFlags();
+
+        // 子 View setNeedsDisplay
+        pButton->setNeedsDisplay();
+        bool dirtyOk = pButton->needsDisplay()
+                     && pPanel->subtreeNeedsDisplay()
+                     && root2->subtreeNeedsDisplay();
+        ESP_LOGI(TAG, "7.2 Dirty propagation: %s", dirtyOk ? "PASS" : "FAIL");
+
+        // 短路测试: 再次 setNeedsDisplay 不应 crash（已标记的祖先短路）
+        pButton->setNeedsDisplay();
+        ESP_LOGI(TAG, "7.2 Short-circuit: PASS (no crash)");
+
+        // --- 7.3 hitTest 测试 ---
+        // root2 -> panel(0,0,540,480) -> button(20,20,100,40)
+        // 重置脏标记
+        root2->clearDirtyFlags();
+        pPanel->clearDirtyFlags();
+        pButton->clearDirtyFlags();
+
+        // 点击 button 范围内: (30, 30) 在 root 坐标系
+        // root.hitTest(30,30) -> 转到 panel 坐标 (30,30) -> 转到 button 坐标 (10,10) -> hit
+        ink::View* hitResult = root2->hitTest(30, 30);
+        bool hitBtnOk = (hitResult == pButton);
+        ESP_LOGI(TAG, "7.3 hitTest button: %s", hitBtnOk ? "PASS" : "FAIL");
+
+        // 点击 panel 但不在 button: (300, 300)
+        ink::View* hitPanel = root2->hitTest(300, 300);
+        bool hitPanelOk = (hitPanel == pPanel);
+        ESP_LOGI(TAG, "7.3 hitTest panel: %s", hitPanelOk ? "PASS" : "FAIL");
+
+        // 点击 root 但不在 panel: (300, 600)
+        ink::View* hitRoot = root2->hitTest(300, 600);
+        bool hitRootOk = (hitRoot == root2.get());
+        ESP_LOGI(TAG, "7.3 hitTest root: %s", hitRootOk ? "PASS" : "FAIL");
+
+        // 隐藏 button 后 hitTest 跳过
+        pButton->setHidden(true);
+        ink::View* hitHidden = root2->hitTest(30, 30);
+        bool hiddenOk = (hitHidden == pPanel);
+        ESP_LOGI(TAG, "7.3 hitTest hidden skip: %s", hiddenOk ? "PASS" : "FAIL");
+        pButton->setHidden(false);
+
+        // --- 7.4 screenFrame 测试 ---
+        ink::Rect btnScreen = pButton->screenFrame();
+        // panel frame=(0,0,540,480), button frame=(20,20,100,40)
+        // screenFrame = (0+20, 0+20, 100, 40) = (20, 20, 100, 40)
+        bool sfOk = (btnScreen.x == 20 && btnScreen.y == 20
+                  && btnScreen.w == 100 && btnScreen.h == 40);
+        ESP_LOGI(TAG, "7.4 screenFrame: %s (%d,%d,%d,%d)",
+                 sfOk ? "PASS" : "FAIL",
+                 btnScreen.x, btnScreen.y, btnScreen.w, btnScreen.h);
+
+        // 给 panel 一个偏移量再测
+        pPanel->setFrame({50, 100, 400, 300});
+        ink::Rect btnScreen2 = pButton->screenFrame();
+        // screenFrame = (50+20, 100+20, 100, 40) = (70, 120, 100, 40)
+        bool sf2Ok = (btnScreen2.x == 70 && btnScreen2.y == 120
+                   && btnScreen2.w == 100 && btnScreen2.h == 40);
+        ESP_LOGI(TAG, "7.4 screenFrame with offset: %s (%d,%d,%d,%d)",
+                 sf2Ok ? "PASS" : "FAIL",
+                 btnScreen2.x, btnScreen2.y, btnScreen2.w, btnScreen2.h);
+
+        ESP_LOGI(TAG, "=== View Test End ===");
     }
 
     /* 6. UI 框架初始化 + 启动 */

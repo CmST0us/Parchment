@@ -5,6 +5,7 @@ set(INK_UI_SRCS
     "src/core/Geometry.cpp"
     "src/core/EpdDriver.cpp"
     "src/core/Canvas.cpp"
+    "src/core/View.cpp"
 )
 
 idf_component_register(
