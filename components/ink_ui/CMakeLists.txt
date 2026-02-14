@@ -4,12 +4,13 @@
 set(INK_UI_SRCS
     "src/core/Geometry.cpp"
     "src/core/EpdDriver.cpp"
+    "src/core/Canvas.cpp"
 )
 
 idf_component_register(
     SRCS ${INK_UI_SRCS}
     INCLUDE_DIRS "include"
-    REQUIRES epd_driver
+    REQUIRES epd_driver epdiy
 )
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)

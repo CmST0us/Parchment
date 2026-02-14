@@ -9,3 +9,4 @@
 
 #include "ink_ui/core/Geometry.h"
 #include "ink_ui/core/EpdDriver.h"
+#include "ink_ui/core/Canvas.h"
