@@ -1,7 +1,10 @@
 idf_component_register(
     SRCS "main.cpp" "board.c"
+         "controllers/BootViewController.cpp"
+         "controllers/LibraryViewController.cpp"
+         "controllers/ReaderViewController.cpp"
     INCLUDE_DIRS "." "pages"
-    PRIV_REQUIRES "epd_driver" "gt911" "sd_storage" "settings_store" "ui_core" "ink_ui"
+    PRIV_REQUIRES "epd_driver" "gt911" "sd_storage" "settings_store" "ui_core" "ink_ui" "book_store"
 )
 
 # C++17 编译选项
