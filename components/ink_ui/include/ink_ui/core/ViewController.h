@@ -31,6 +31,12 @@ public:
     /// 获取根 View（首次调用触发 viewDidLoad）
     View* getView();
 
+    /// 取出 View 所有权（用于挂载到 Window 树）
+    std::unique_ptr<View> takeView();
+
+    /// 归还 View 所有权（从 Window 树卸载后）
+    void returnView(std::unique_ptr<View> view);
+
     // ── 生命周期回调（子类可选 override）──
 
     /// 创建 View 树（纯虚函数，只调用一次）
@@ -53,6 +59,9 @@ public:
     /// 处理非触摸事件（SwipeEvent、TimerEvent 等）
     virtual void handleEvent(const Event& event) { (void)event; }
 
+    /// 是否隐藏状态栏（默认 false，子类可覆写）
+    virtual bool prefersStatusBarHidden() const { return false; }
+
     // ── 属性 ──
 
     std::string title_;
@@ -63,6 +72,7 @@ protected:
 
 private:
     bool viewLoaded_ = false;
+    View* viewRawPtr_ = nullptr;  ///< 缓存 raw pointer，view_ 被 take 后仍有效
 };
 
 } // namespace ink

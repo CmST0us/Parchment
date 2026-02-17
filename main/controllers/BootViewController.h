@@ -15,6 +15,7 @@ public:
     void viewDidLoad() override;
     void viewDidAppear() override;
     void handleEvent(const ink::Event& event) override;
+    bool prefersStatusBarHidden() const override { return true; }
 
 private:
     ink::Application& app_;

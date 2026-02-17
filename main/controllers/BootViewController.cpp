@@ -31,9 +31,8 @@ void BootViewController::viewDidLoad() {
     const EpdFont* fontMedium = ui_font_get(20);
     const EpdFont* fontSmall = ui_font_get(16);
 
-    // 根 View: 全屏, FlexBox Column, 居中对齐
+    // 根 View: FlexBox Column, 居中对齐（由 contentArea_ 约束尺寸）
     view_ = std::make_unique<ink::View>();
-    view_->setFrame({0, 0, ink::kScreenWidth, ink::kScreenHeight});
     view_->setBackgroundColor(ink::Color::White);
     view_->flexStyle_.direction = ink::FlexDirection::Column;
     view_->flexStyle_.alignItems = ink::Align::Center;

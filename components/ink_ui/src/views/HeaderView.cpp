@@ -9,7 +9,7 @@
 namespace ink {
 
 HeaderView::HeaderView() {
-    setBackgroundColor(Color::Black);
+    setBackgroundColor(Color::White);
     setRefreshHint(RefreshHint::Quality);
 
     // FlexBox Row 布局
@@ -65,7 +65,7 @@ void HeaderView::rebuild() {
         btn->setStyle(ButtonStyle::Icon);
         btn->setIcon(leftIconData_);
         btn->setOnTap(leftTap_);
-        btn->setBackgroundColor(Color::Black);  // 匹配 Header 黑底
+        btn->setBackgroundColor(Color::White);
         btn->flexBasis_ = kButtonSize;
         leftButton_ = btn.get();
         addSubview(std::move(btn));
@@ -73,8 +73,8 @@ void HeaderView::rebuild() {
 
     // 标题 Label（始终存在，flexGrow=1 填充剩余空间）
     auto label = std::make_unique<TextLabel>();
-    label->setColor(Color::White);
-    label->setBackgroundColor(Color::Black);  // 匹配 Header 黑底
+    label->setColor(Color::Black);
+    label->setBackgroundColor(Color::White);
     label->setAlignment(Align::Center);
     label->flexGrow_ = 1;
     if (font_) label->setFont(font_);
@@ -88,7 +88,7 @@ void HeaderView::rebuild() {
         btn->setStyle(ButtonStyle::Icon);
         btn->setIcon(rightIconData_);
         btn->setOnTap(rightTap_);
-        btn->setBackgroundColor(Color::Black);  // 匹配 Header 黑底
+        btn->setBackgroundColor(Color::White);
         btn->flexBasis_ = kButtonSize;
         rightButton_ = btn.get();
         addSubview(std::move(btn));

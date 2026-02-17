@@ -13,6 +13,11 @@ static const char* TAG = "ink::NavCtrl";
 
 namespace ink {
 
+void NavigationController::setOnViewControllerChange(
+    std::function<void(ViewController*)> callback) {
+    onVCChange_ = std::move(callback);
+}
+
 void NavigationController::push(std::unique_ptr<ViewController> vc) {
     if (!vc) return;
 
@@ -32,8 +37,9 @@ void NavigationController::push(std::unique_ptr<ViewController> vc) {
     ViewController* newVc = vc.get();
     stack_.push_back(std::move(vc));
 
-    // 触发 viewDidLoad（如首次）+ 生命周期
+    // 触发 viewDidLoad（如首次）+ 回调 + 生命周期
     newVc->getView();
+    if (onVCChange_) onVCChange_(newVc);
     newVc->viewWillAppear();
     newVc->viewDidAppear();
 
@@ -53,18 +59,19 @@ void NavigationController::pop() {
     top->viewWillDisappear();
     top->viewDidDisappear();
 
-    // 销毁栈顶
+    // 确定新栈顶，并在销毁旧 VC 之前触发回调（归还旧 VC 的 View 所有权）
+    auto* newTop = stack_[stack_.size() - 2].get();
+    if (onVCChange_) onVCChange_(newTop);
+
+    // 销毁旧栈顶（此时其 view_ 已归还，正常释放）
     stack_.pop_back();
 
     // 新栈顶生命周期
-    if (!stack_.empty()) {
-        auto* newTop = stack_.back().get();
-        newTop->viewWillAppear();
-        newTop->viewDidAppear();
+    newTop->viewWillAppear();
+    newTop->viewDidAppear();
 
-        ESP_LOGI(TAG, "Pop: depth=%d, now='%s'",
-                 static_cast<int>(stack_.size()), newTop->title_.c_str());
-    }
+    ESP_LOGI(TAG, "Pop: depth=%d, now='%s'",
+             static_cast<int>(stack_.size()), newTop->title_.c_str());
 }
 
 void NavigationController::replace(std::unique_ptr<ViewController> vc) {
@@ -81,12 +88,15 @@ void NavigationController::replace(std::unique_ptr<ViewController> vc) {
     old->viewWillDisappear();
     old->viewDidDisappear();
 
-    // 替换
+    // 加载新 VC 的 View，在销毁旧 VC 之前触发回调
+    ViewController* newVc = vc.get();
+    newVc->getView();
+    if (onVCChange_) onVCChange_(newVc);
+
+    // 替换（销毁旧 VC，此时其 view_ 已归还）
     stack_.back() = std::move(vc);
 
     // 新 VC 生命周期
-    auto* newVc = stack_.back().get();
-    newVc->getView();
     newVc->viewWillAppear();
     newVc->viewDidAppear();
 

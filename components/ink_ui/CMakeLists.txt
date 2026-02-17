@@ -19,6 +19,7 @@ set(INK_UI_SRCS
     "src/views/ProgressBarView.cpp"
     "src/views/SeparatorView.cpp"
     "src/views/PageIndicatorView.cpp"
+    "src/views/StatusBarView.cpp"
 )
 
 idf_component_register(

@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -35,8 +36,12 @@ public:
     /// 返回当前栈深度
     int depth() const;
 
+    /// 设置 VC 切换回调（在 getView() 之后、viewWillAppear() 之前触发）
+    void setOnViewControllerChange(std::function<void(ViewController*)> callback);
+
 private:
     std::vector<std::unique_ptr<ViewController>> stack_;
+    std::function<void(ViewController*)> onVCChange_;
 };
 
 } // namespace ink

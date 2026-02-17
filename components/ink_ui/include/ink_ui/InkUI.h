@@ -27,3 +27,4 @@
 #include "ink_ui/views/ProgressBarView.h"
 #include "ink_ui/views/SeparatorView.h"
 #include "ink_ui/views/PageIndicatorView.h"
+#include "ink_ui/views/StatusBarView.h"

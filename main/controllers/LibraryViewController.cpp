@@ -10,7 +10,6 @@
 #include "controllers/LibraryViewController.h"
 #include "controllers/ReaderViewController.h"
 #include "views/BookCoverView.h"
-#include "views/StatusBarView.h"
 
 extern "C" {
 #include "esp_log.h"
@@ -48,19 +47,11 @@ void LibraryViewController::viewDidLoad() {
     const EpdFont* fontMedium = ui_font_get(20);
     const EpdFont* fontSmall = ui_font_get(16);
 
-    // 根 View: 全屏 FlexBox Column
+    // 根 View: FlexBox Column（由 contentArea_ 约束尺寸）
     view_ = std::make_unique<ink::View>();
-    view_->setFrame({0, 0, ink::kScreenWidth, ink::kScreenHeight});
     view_->setBackgroundColor(ink::Color::White);
     view_->flexStyle_.direction = ink::FlexDirection::Column;
     view_->flexStyle_.alignItems = ink::Align::Stretch;
-
-    // ── 状态栏 (20px) ──
-    auto statusBar = std::make_unique<StatusBarView>();
-    statusBar->setFont(fontSmall);
-    statusBar->updateTime();
-    statusBar->flexBasis_ = 20;
-    view_->addSubview(std::move(statusBar));
 
     // ── HeaderView: 汉堡菜单 + "Parchment" + 设置图标 ──
     auto header = std::make_unique<ink::HeaderView>();
@@ -74,6 +65,12 @@ void LibraryViewController::viewDidLoad() {
     });
     header->flexBasis_ = 48;
     view_->addSubview(std::move(header));
+
+    // ── Header 与 Subheader 间的分隔线 ──
+    auto headerSep = std::make_unique<ink::SeparatorView>();
+    headerSep->setLineColor(ink::Color::Light);
+    headerSep->flexBasis_ = 1;
+    view_->addSubview(std::move(headerSep));
 
     // ── Subheader: 书本图标 + "共 N 本" + "按名称排序" ──
     auto subheader = std::make_unique<ink::View>();

@@ -81,9 +81,8 @@ void ReaderViewController::viewDidLoad() {
         lineHeight_ = fontReading->advance_y;
     }
 
-    // 根 View
+    // 根 View（由 contentArea_ 约束尺寸）
     view_ = std::make_unique<ink::View>();
-    view_->setFrame({0, 0, ink::kScreenWidth, ink::kScreenHeight});
     view_->setBackgroundColor(ink::Color::White);
     view_->flexStyle_.direction = ink::FlexDirection::Column;
     view_->flexStyle_.alignItems = ink::Align::Stretch;
@@ -176,10 +175,12 @@ void ReaderViewController::viewDidLoad() {
         return;
     }
 
-    // 计算布局参数（content area 在布局完成后才知道确切尺寸）
+    // 计算布局参数
+    // VC 可用高度 = 屏幕高度 - 状态栏(20px)
+    int vcHeight = ink::kScreenHeight - 20;
     contentAreaWidth_ = ink::kScreenWidth - 2 * margin;
-    // 可用内容高度：总高度 - header(48) - headerLabel(24) - footer(32) - padding
-    contentAreaHeight_ = ink::kScreenHeight - 48 - 24 - 32 - 16;
+    // 可用内容高度：VC高度 - header(48) - headerLabel(24) - footer(32) - padding
+    contentAreaHeight_ = vcHeight - 48 - 24 - 32 - 16;
 
     // 分页
     paginate();

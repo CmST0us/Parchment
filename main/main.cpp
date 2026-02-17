@@ -78,6 +78,14 @@ extern "C" void app_main(void) {
         return;
     }
 
+    // 设置状态栏字体
+    if (app.statusBar()) {
+        const EpdFont* smallFont = ui_font_get(16);
+        if (smallFont) {
+            app.statusBar()->setFont(smallFont);
+        }
+    }
+
     // 推入启动画面
     auto bootVC = std::make_unique<BootViewController>(app);
     app.navigator().push(std::move(bootVC));

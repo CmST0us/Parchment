@@ -15,6 +15,8 @@
 
 namespace ink {
 
+class StatusBarView;
+
 /// InkUI 应用主循环
 class Application {
 public:
@@ -38,17 +40,33 @@ public:
     /// 获取渲染引擎
     RenderEngine& renderer() { return *renderEngine_; }
 
+    /// 获取状态栏 View（供外部设置字体等）
+    StatusBarView* statusBar() { return statusBar_; }
+
 private:
     NavigationController navigator_;
     QueueHandle_t eventQueue_ = nullptr;
     std::unique_ptr<RenderEngine> renderEngine_;
     std::unique_ptr<GestureRecognizer> gesture_;
 
+    // ── Window View 树 ──
+    std::unique_ptr<View> windowRoot_;
+    StatusBarView* statusBar_ = nullptr;       ///< 非拥有，windowRoot_ 子树中
+    View* contentArea_ = nullptr;              ///< 非拥有，windowRoot_ 子树中
+    ViewController* mountedVC_ = nullptr;      ///< 当前挂载的 VC
+    int lastMinute_ = -1;                      ///< 时间更新追踪
+
     /// 事件队列超时（30 秒）
     static constexpr int kQueueTimeoutMs = 30000;
 
     /// 事件队列容量
     static constexpr int kEventQueueSize = 16;
+
+    /// 构建 Window View 树（windowRoot_ + statusBar_ + contentArea_）
+    void buildWindowTree();
+
+    /// 挂载 VC 的 root view 到 contentArea_
+    void mountViewController(ViewController* vc);
 
     /// 分发事件
     void dispatchEvent(const Event& event);

@@ -11,19 +11,21 @@ extern "C" {
 #include "epdiy.h"
 }
 
+namespace ink {
+
 /// 系统状态栏 (20px 高)
-class StatusBarView : public ink::View {
+class StatusBarView : public View {
 public:
     StatusBarView();
 
     /// 设置字体
     void setFont(const EpdFont* font);
 
-    /// 更新时间显示（由外部定时调用或在 viewWillAppear 中调用）
+    /// 更新时间显示（由外部定时调用）
     void updateTime();
 
-    void onDraw(ink::Canvas& canvas) override;
-    ink::Size intrinsicSize() const override;
+    void onDraw(Canvas& canvas) override;
+    Size intrinsicSize() const override;
 
 private:
     const EpdFont* font_ = nullptr;
@@ -31,3 +33,5 @@ private:
 
     static constexpr int kHeight = 20;
 };
+
+} // namespace ink
