@@ -5,6 +5,7 @@
 
 #include "book_store.h"
 #include "sd_storage.h"
+#include "text_encoding.h"
 
 #include <dirent.h>
 #include <string.h>
@@ -73,11 +74,23 @@ esp_err_t book_store_scan(void) {
         }
 
         book_info_t *book = &s_books[s_count];
-        strncpy(book->name, entry->d_name, BOOK_NAME_MAX_LEN - 1);
-        book->name[BOOK_NAME_MAX_LEN - 1] = '\0';
 
+        /* path 保持原始编码（GBK），供 fopen 使用 */
         snprintf(book->path, BOOK_PATH_MAX_LEN, "%s/%s",
                  BOOKS_DIR, entry->d_name);
+
+        /* name 转为 UTF-8 供 UI 显示 */
+        size_t name_len = strlen(entry->d_name);
+        text_encoding_t enc = text_encoding_detect(entry->d_name, name_len);
+        if (enc == TEXT_ENCODING_GBK) {
+            size_t dst_len = BOOK_NAME_MAX_LEN - 1;
+            text_encoding_gbk_to_utf8(entry->d_name, name_len,
+                                       book->name, &dst_len);
+            book->name[dst_len] = '\0';
+        } else {
+            strncpy(book->name, entry->d_name, BOOK_NAME_MAX_LEN - 1);
+            book->name[BOOK_NAME_MAX_LEN - 1] = '\0';
+        }
 
         /* 获取文件大小 */
         struct stat st;

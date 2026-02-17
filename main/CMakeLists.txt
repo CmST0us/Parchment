@@ -6,7 +6,7 @@ idf_component_register(
          "views/BootLogoView.cpp"
          "views/BookCoverView.cpp"
     INCLUDE_DIRS "." "pages"
-    PRIV_REQUIRES "epd_driver" "gt911" "sd_storage" "settings_store" "ui_core" "ink_ui" "book_store"
+    PRIV_REQUIRES "epd_driver" "gt911" "sd_storage" "settings_store" "ui_core" "ink_ui" "book_store" "text_encoding"
 )
 
 # C++17 编译选项

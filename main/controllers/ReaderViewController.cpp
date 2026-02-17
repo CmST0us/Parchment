@@ -13,6 +13,7 @@ extern "C" {
 #include "esp_heap_caps.h"
 #include "ui_font.h"
 #include "ui_icon.h"
+#include "text_encoding.h"
 }
 
 static const char* TAG = "ReaderVC";
@@ -260,6 +261,44 @@ bool ReaderViewController::loadFile() {
         heap_caps_free(textBuffer_);
         textBuffer_ = nullptr;
         return false;
+    }
+
+    // 编码检测与转码
+    text_encoding_t enc = text_encoding_detect(textBuffer_, textSize_);
+    ESP_LOGI(TAG, "Detected encoding: %d", (int)enc);
+
+    if (enc == TEXT_ENCODING_GBK) {
+        // GBK → UTF-8: 最坏情况 1.5 倍 + 1 (null terminator)
+        size_t dst_cap = (size_t)textSize_ * 3 / 2 + 1;
+        char* utf8Buf = static_cast<char*>(
+            heap_caps_malloc(dst_cap + 1, MALLOC_CAP_SPIRAM));
+        if (!utf8Buf) {
+            ESP_LOGE(TAG, "Failed to allocate %zu bytes for GBK→UTF-8", dst_cap);
+            heap_caps_free(textBuffer_);
+            textBuffer_ = nullptr;
+            return false;
+        }
+
+        size_t out_len = dst_cap;
+        esp_err_t err = text_encoding_gbk_to_utf8(textBuffer_, textSize_,
+                                                    utf8Buf, &out_len);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "GBK→UTF-8 conversion failed");
+            heap_caps_free(utf8Buf);
+            heap_caps_free(textBuffer_);
+            textBuffer_ = nullptr;
+            return false;
+        }
+
+        heap_caps_free(textBuffer_);
+        textBuffer_ = utf8Buf;
+        textSize_ = static_cast<uint32_t>(out_len);
+        ESP_LOGI(TAG, "Converted GBK→UTF-8: %lu bytes", (unsigned long)textSize_);
+    } else if (enc == TEXT_ENCODING_UTF8_BOM) {
+        // 剥离 BOM: 跳过前 3 字节
+        memmove(textBuffer_, textBuffer_ + 3, textSize_ - 3);
+        textSize_ -= 3;
+        ESP_LOGI(TAG, "Stripped UTF-8 BOM, size now %lu", (unsigned long)textSize_);
     }
 
     textBuffer_[textSize_] = '\0';
