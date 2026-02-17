@@ -20,7 +20,7 @@ PageIndicatorView::PageIndicatorView() {
     // 上一页按钮
     auto prev = std::make_unique<ButtonView>();
     prev->setStyle(ButtonStyle::Secondary);
-    prev->setLabel("<");
+    prev->setLabel("上一页");
     prev->flexBasis_ = kButtonSize;
     prev->setOnTap([this]() {
         if (currentPage_ > 0) {
@@ -43,7 +43,7 @@ PageIndicatorView::PageIndicatorView() {
     // 下一页按钮
     auto next = std::make_unique<ButtonView>();
     next->setStyle(ButtonStyle::Secondary);
-    next->setLabel(">");
+    next->setLabel("下一页");
     next->flexBasis_ = kButtonSize;
     next->setOnTap([this]() {
         if (currentPage_ < totalPages_ - 1) {
@@ -80,7 +80,7 @@ void PageIndicatorView::setOnPageChange(std::function<void(int)> callback) {
 void PageIndicatorView::updateDisplay() {
     // 更新页码文字（1-based 显示）
     char buf[32];
-    snprintf(buf, sizeof(buf), "%d/%d", currentPage_ + 1, totalPages_);
+    snprintf(buf, sizeof(buf), "%d / %d", currentPage_ + 1, totalPages_);
     if (pageLabel_) pageLabel_->setText(buf);
 
     // 更新按钮禁用状态

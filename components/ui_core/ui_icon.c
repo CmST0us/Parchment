@@ -60,6 +60,12 @@ const ui_icon_t UI_ICON_CHEVRON_RIGHT = {
     .h = ICON_SIZE,
 };
 
+const ui_icon_t UI_ICON_BOOK = {
+    .data = icon_book_2_data,
+    .w = ICON_SIZE,
+    .h = ICON_SIZE,
+};
+
 /* ── 绘制 API ── */
 
 void ui_icon_draw(uint8_t *fb, int x, int y, const ui_icon_t *icon, uint8_t color) {

@@ -31,6 +31,7 @@ extern const ui_icon_t UI_ICON_LIST;           /**< 列表/目录。 */
 extern const ui_icon_t UI_ICON_SORT_DESC;      /**< 降序排序。 */
 extern const ui_icon_t UI_ICON_TYPOGRAPHY;     /**< Aa 字体设置。 */
 extern const ui_icon_t UI_ICON_CHEVRON_RIGHT;  /**< > 右箭头。 */
+extern const ui_icon_t UI_ICON_BOOK;           /**< 书本。 */
 
 /**
  * @brief 以指定前景色绘制图标。

@@ -73,9 +73,16 @@ void ButtonView::onDraw(Canvas& canvas) {
             break;
         }
         case ButtonStyle::Icon: {
-            // 透明底，只绘制图标
+            // 只绘制图标，背景由 RenderEngine 的 clear 处理
             if (icon_) {
-                uint8_t tint = enabled_ ? Color::Black : Color::Medium;
+                // 根据背景色自动选择对比前景色
+                uint8_t tint;
+                if (enabled_) {
+                    tint = (backgroundColor() < 0x80) ? Color::White
+                                                      : Color::Black;
+                } else {
+                    tint = Color::Medium;
+                }
                 int x = (r.w - kIconSize) / 2;
                 int y = (r.h - kIconSize) / 2;
                 canvas.drawBitmapFg(icon_, x, y, kIconSize, kIconSize, tint);

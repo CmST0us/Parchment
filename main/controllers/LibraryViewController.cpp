@@ -1,10 +1,16 @@
 /**
  * @file LibraryViewController.cpp
  * @brief 书库控制器实现。
+ *
+ * 像素级还原 design/index.html 的 Library 页面:
+ * Header(汉堡+标题+设置) → Subheader(图标+书数+排序) →
+ * 书籍列表(封面+信息) → 翻页指示器
  */
 
 #include "controllers/LibraryViewController.h"
 #include "controllers/ReaderViewController.h"
+#include "views/BookCoverView.h"
+#include "views/StatusBarView.h"
 
 extern "C" {
 #include "esp_log.h"
@@ -39,7 +45,8 @@ void LibraryViewController::viewDidLoad() {
     ESP_LOGI(TAG, "viewDidLoad");
 
     const EpdFont* fontLarge = ui_font_get(28);
-    const EpdFont* fontSmall = ui_font_get(20);
+    const EpdFont* fontMedium = ui_font_get(20);
+    const EpdFont* fontSmall = ui_font_get(16);
 
     // 根 View: 全屏 FlexBox Column
     view_ = std::make_unique<ink::View>();
@@ -48,58 +55,81 @@ void LibraryViewController::viewDidLoad() {
     view_->flexStyle_.direction = ink::FlexDirection::Column;
     view_->flexStyle_.alignItems = ink::Align::Stretch;
 
-    // HeaderView: 标题栏
+    // ── 状态栏 (20px) ──
+    auto statusBar = std::make_unique<StatusBarView>();
+    statusBar->setFont(fontSmall);
+    statusBar->updateTime();
+    statusBar->flexBasis_ = 20;
+    view_->addSubview(std::move(statusBar));
+
+    // ── HeaderView: 汉堡菜单 + "Parchment" + 设置图标 ──
     auto header = std::make_unique<ink::HeaderView>();
     header->setFont(fontLarge);
     header->setTitle("Parchment");
+    header->setLeftIcon(UI_ICON_MENU.data, []() {
+        ESP_LOGI("LibraryVC", "Menu tapped (not implemented)");
+    });
     header->setRightIcon(UI_ICON_SETTINGS.data, []() {
         ESP_LOGI("LibraryVC", "Settings tapped (not implemented)");
     });
     header->flexBasis_ = 48;
     view_->addSubview(std::move(header));
 
-    // 副标题: "N 本书"
-    auto subtitle = std::make_unique<ink::TextLabel>();
-    subtitle->setFont(fontSmall);
-    subtitle->setColor(ink::Color::Dark);
-    subtitle->flexBasis_ = 32;
-    subtitleLabel_ = subtitle.get();
+    // ── Subheader: 书本图标 + "共 N 本" + "按名称排序" ──
+    auto subheader = std::make_unique<ink::View>();
+    subheader->flexBasis_ = 36;
+    subheader->setBackgroundColor(0xE8);  // 浅灰背景
+    subheader->flexStyle_.direction = ink::FlexDirection::Row;
+    subheader->flexStyle_.alignItems = ink::Align::Center;
+    subheader->flexStyle_.padding = ink::Insets{0, 16, 0, 16};
+    subheader->flexStyle_.gap = 6;
 
-    // 包装副标题带左 padding
-    auto subtitleContainer = std::make_unique<ink::View>();
-    subtitleContainer->flexBasis_ = 32;
-    subtitleContainer->setBackgroundColor(ink::Color::White);
-    subtitleContainer->flexStyle_.direction = ink::FlexDirection::Column;
-    subtitleContainer->flexStyle_.padding = ink::Insets{4, 16, 4, 16};
-    subtitleContainer->flexStyle_.alignItems = ink::Align::Stretch;
-    subtitle->flexGrow_ = 1;
-    subtitleContainer->addSubview(std::move(subtitle));
-    view_->addSubview(std::move(subtitleContainer));
+    // 书本图标
+    auto bookIcon = std::make_unique<ink::IconView>();
+    bookIcon->setIcon(UI_ICON_BOOK.data);
+    bookIcon->setTintColor(ink::Color::Dark);
+    bookIcon->flexBasis_ = 32;
+    subheader->addSubview(std::move(bookIcon));
 
-    // 分隔线
+    // "共 N 本" 文字
+    auto countLabel = std::make_unique<ink::TextLabel>();
+    countLabel->setFont(fontSmall);
+    countLabel->setColor(ink::Color::Dark);
+    countLabel->flexGrow_ = 1;
+    subtitleLabel_ = countLabel.get();
+    subheader->addSubview(std::move(countLabel));
+
+    // "按名称排序" 文字
+    auto sortLabel = std::make_unique<ink::TextLabel>();
+    sortLabel->setFont(fontSmall);
+    sortLabel->setText("按名称排序");
+    sortLabel->setColor(ink::Color::Dark);
+    sortLabel->setAlignment(ink::Align::End);
+    sortLabel->flexBasis_ = 100;
+    subheader->addSubview(std::move(sortLabel));
+
+    view_->addSubview(std::move(subheader));
+
+    // ── 分隔线 ──
     auto sep = std::make_unique<ink::SeparatorView>();
     sep->flexBasis_ = 1;
     view_->addSubview(std::move(sep));
 
-    // 列表容器（flexGrow 填满剩余空间）
+    // ── 列表容器（flexGrow 填满剩余空间）──
     auto listCont = std::make_unique<ink::View>();
     listCont->flexGrow_ = 1;
     listCont->setBackgroundColor(ink::Color::White);
     listCont->flexStyle_.direction = ink::FlexDirection::Column;
     listCont->flexStyle_.alignItems = ink::Align::Stretch;
-    listCont->flexStyle_.padding = ink::Insets{0, 16, 0, 16};
     listContainer_ = listCont.get();
     view_->addSubview(std::move(listCont));
 
-    // 空列表提示（初始隐藏）
-    // 会在 buildPage 中按需显示/隐藏
-
-    // 底部分隔线
+    // ── 底部分隔线 ──
     auto sepBottom = std::make_unique<ink::SeparatorView>();
     sepBottom->flexBasis_ = 1;
     view_->addSubview(std::move(sepBottom));
 
-    // PageIndicatorView
+    // ── PageIndicatorView ──
     auto pageInd = std::make_unique<ink::PageIndicatorView>();
     pageInd->setFont(fontSmall);
     pageInd->setPage(0, 1);
@@ -110,7 +140,7 @@ void LibraryViewController::viewDidLoad() {
     pageIndicator_ = pageInd.get();
     view_->addSubview(std::move(pageInd));
 
-    // 初始数据加载
+    // ── 初始数据加载 ──
     updatePageInfo();
     buildPage();
 }
@@ -138,16 +168,17 @@ void LibraryViewController::handleEvent(const ink::Event& event) {
 void LibraryViewController::buildPage() {
     if (!listContainer_) return;
 
-    const EpdFont* fontSmall = ui_font_get(20);
+    const EpdFont* fontMedium = ui_font_get(20);
+    const EpdFont* fontSmall = ui_font_get(16);
     size_t bookCount = book_store_get_count();
 
     listContainer_->clearSubviews();
 
-    // 空列表状态
+    // ── 空列表状态 ──
     if (bookCount == 0) {
         auto emptyMsg = std::make_unique<ink::TextLabel>();
-        emptyMsg->setFont(fontSmall);
-        emptyMsg->setText("No books found");
+        emptyMsg->setFont(fontMedium);
+        emptyMsg->setText("未找到书籍");
         emptyMsg->setColor(ink::Color::Medium);
         emptyMsg->setAlignment(ink::Align::Center);
         emptyMsg->flexGrow_ = 1;
@@ -174,14 +205,29 @@ void LibraryViewController::buildPage() {
         const book_info_t* book = book_store_get_book(i);
         if (!book) continue;
 
-        // 书籍条目容器（支持点击）
+        // ── 书籍条目容器: Row 布局（支持点击）──
         auto item = std::make_unique<TappableView>();
         item->flexBasis_ = kItemHeight;
         item->setBackgroundColor(ink::Color::White);
-        item->flexStyle_.direction = ink::FlexDirection::Column;
-        item->flexStyle_.padding = ink::Insets{8, 0, 8, 0};
-        item->flexStyle_.gap = 4;
-        item->flexStyle_.alignItems = ink::Align::Stretch;
+        item->flexStyle_.direction = ink::FlexDirection::Row;
+        item->flexStyle_.padding = ink::Insets{12, 16, 12, 16};
+        item->flexStyle_.gap = 16;
+        item->flexStyle_.alignItems = ink::Align::Center;
+
+        // ── 左侧: 封面缩略图 (52×72px) ──
+        auto cover = std::make_unique<BookCoverView>();
+        cover->setFont(fontSmall);
+        cover->setFormatTag("TXT");
+        cover->flexBasis_ = 52;
+        item->addSubview(std::move(cover));
+
+        // ── 右侧: 信息区域 (Column) ──
+        auto infoCol = std::make_unique<ink::View>();
+        infoCol->flexGrow_ = 1;
+        infoCol->setBackgroundColor(ink::Color::White);
+        infoCol->flexStyle_.direction = ink::FlexDirection::Column;
+        infoCol->flexStyle_.alignItems = ink::Align::Stretch;
+        infoCol->flexStyle_.gap = 4;
 
         // 书名（去掉 .txt 后缀）
         std::string bookName(book->name);
@@ -193,11 +239,11 @@ void LibraryViewController::buildPage() {
         }
 
         auto nameLabel = std::make_unique<ink::TextLabel>();
-        nameLabel->setFont(fontSmall);
+        nameLabel->setFont(fontMedium);
         nameLabel->setText(bookName);
         nameLabel->setColor(ink::Color::Black);
         nameLabel->flexBasis_ = 28;
-        item->addSubview(std::move(nameLabel));
+        infoCol->addSubview(std::move(nameLabel));
 
         // 文件大小
         char sizeStr[32];
@@ -217,21 +263,44 @@ void LibraryViewController::buildPage() {
         sizeLabel->setText(sizeStr);
         sizeLabel->setColor(ink::Color::Dark);
         sizeLabel->flexBasis_ = 20;
-        item->addSubview(std::move(sizeLabel));
+        infoCol->addSubview(std::move(sizeLabel));
+
+        // 进度条行: Row(ProgressBar + 百分比文字)
+        auto progressRow = std::make_unique<ink::View>();
+        progressRow->flexBasis_ = 20;
+        progressRow->setBackgroundColor(ink::Color::White);
+        progressRow->flexStyle_.direction = ink::FlexDirection::Row;
+        progressRow->flexStyle_.alignItems = ink::Align::Center;
+        progressRow->flexStyle_.gap = 10;
 
         // 阅读进度条
         reading_progress_t progress = {};
         settings_store_load_progress(book->path, &progress);
-
-        auto progressBar = std::make_unique<ink::ProgressBarView>();
         int pct = 0;
         if (progress.total_bytes > 0) {
-            pct = static_cast<int>(progress.byte_offset * 100 / progress.total_bytes);
+            pct = static_cast<int>(progress.byte_offset * 100 /
+                                   progress.total_bytes);
         }
+
+        auto progressBar = std::make_unique<ink::ProgressBarView>();
         progressBar->setValue(pct);
         progressBar->setTrackHeight(6);
-        progressBar->flexBasis_ = 16;
-        item->addSubview(std::move(progressBar));
+        progressBar->flexGrow_ = 1;
+        progressRow->addSubview(std::move(progressBar));
+
+        // 百分比文字
+        char pctStr[8];
+        snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
+        auto pctLabel = std::make_unique<ink::TextLabel>();
+        pctLabel->setFont(fontSmall);
+        pctLabel->setText(pctStr);
+        pctLabel->setColor(ink::Color::Medium);
+        pctLabel->flexBasis_ = 40;
+        pctLabel->setAlignment(ink::Align::End);
+        progressRow->addSubview(std::move(pctLabel));
+
+        infoCol->addSubview(std::move(progressRow));
+        item->addSubview(std::move(infoCol));
 
         // 设置点击回调
         int bookIdx = i;
@@ -239,7 +308,8 @@ void LibraryViewController::buildPage() {
             const book_info_t* bk = book_store_get_book(bookIdx);
             if (bk) {
                 ESP_LOGI("LibraryVC", "Opening book: %s", bk->name);
-                auto readerVC = std::make_unique<ReaderViewController>(app_, *bk);
+                auto readerVC =
+                    std::make_unique<ReaderViewController>(app_, *bk);
                 app_.navigator().push(std::move(readerVC));
             }
         };
@@ -264,7 +334,7 @@ void LibraryViewController::updatePageInfo() {
     // 更新副标题
     if (subtitleLabel_) {
         char buf[32];
-        snprintf(buf, sizeof(buf), "%zu 本书", bookCount);
+        snprintf(buf, sizeof(buf), "共 %zu 本", bookCount);
         subtitleLabel_->setText(buf);
     }
 
@@ -272,7 +342,8 @@ void LibraryViewController::updatePageInfo() {
     if (bookCount == 0) {
         totalPages_ = 0;
     } else {
-        totalPages_ = (static_cast<int>(bookCount) + kItemsPerPage - 1) / kItemsPerPage;
+        totalPages_ = (static_cast<int>(bookCount) + kItemsPerPage - 1) /
+                      kItemsPerPage;
     }
 
     if (currentPage_ >= totalPages_ && totalPages_ > 0) {
@@ -280,7 +351,8 @@ void LibraryViewController::updatePageInfo() {
     }
 
     if (pageIndicator_) {
-        pageIndicator_->setPage(currentPage_, totalPages_ > 0 ? totalPages_ : 1);
+        pageIndicator_->setPage(currentPage_,
+                                totalPages_ > 0 ? totalPages_ : 1);
     }
 }
 

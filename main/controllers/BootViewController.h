@@ -19,6 +19,7 @@ public:
 private:
     ink::Application& app_;
     ink::TextLabel* statusLabel_ = nullptr;
+    ink::ProgressBarView* progressBar_ = nullptr;
 
     static constexpr int kTimerId = 1;
     static constexpr int kDelayMs = 2000;
