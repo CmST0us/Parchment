@@ -1,0 +1,1985 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parchment E-Reader UI Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   PARCHMENT E-READER DESIGN SYSTEM
+   540×960 · 16-level grayscale · E-Ink aesthetic
+   ═══════════════════════════════════════════════ */
+
+:root {
+  /* E-Ink grayscale palette */
+  --ink-black:   #111111;
+  --ink-dark:    #3a3a3a;
+  --ink-medium:  #888888;
+  --ink-light:   #cccccc;
+  --ink-paper:   #f0f0ee;
+  --ink-white:   #f7f7f5;
+
+  /* Functional tokens */
+  --bg-primary:   var(--ink-white);
+  --bg-header:    var(--ink-black);
+  --bg-subheader: #e8e8e5;
+  --bg-selected:  #ddddd8;
+  --bg-hover:     #e4e4e0;
+
+  --text-primary:   var(--ink-black);
+  --text-secondary: var(--ink-dark);
+  --text-muted:     var(--ink-medium);
+  --text-inverse:   var(--ink-white);
+
+  --border-color:   #d0d0cc;
+  --separator-color: var(--ink-medium);
+
+  /* Typography */
+  --font-ui: 'Noto Sans SC', -apple-system, sans-serif;
+  --font-reading: 'Noto Serif SC', 'Source Serif 4', Georgia, serif;
+
+  /* Device dimensions */
+  --screen-w: 540px;
+  --screen-h: 960px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #2a2a2e;
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 32px 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Device Frame ── */
+.device-wrapper {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+}
+
+.device-frame {
+  width: 580px;
+  background: #1a1a1e;
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow:
+    0 4px 24px rgba(0,0,0,0.5),
+    0 1px 0 rgba(255,255,255,0.04) inset;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.device-bezel-label {
+  text-align: center;
+  color: #666;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  font-family: var(--font-ui);
+  font-weight: 300;
+}
+
+.screen {
+  width: var(--screen-w);
+  height: var(--screen-h);
+  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  /* E-Ink paper texture */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='%23f7f7f5'/%3E%3Crect width='1' height='1' fill='%23f4f4f2' x='2' y='0'/%3E%3Crect width='1' height='1' fill='%23f5f5f3' x='0' y='2'/%3E%3C/svg%3E");
+}
+
+/* ── Navigation Panel ── */
+.nav-panel {
+  background: #222226;
+  border-radius: 16px;
+  padding: 24px 20px;
+  width: 220px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 32px;
+}
+
+.nav-panel h3 {
+  color: #999;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+
+.nav-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #aaa;
+  font-size: 13px;
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 4px;
+}
+
+.nav-btn:hover {
+  background: #2e2e32;
+  color: #ddd;
+}
+
+.nav-btn.active {
+  background: #333338;
+  color: #fff;
+  border-color: #444;
+}
+
+.nav-btn .nav-icon {
+  display: inline-block;
+  width: 20px;
+  text-align: center;
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.nav-divider {
+  height: 1px;
+  background: #333;
+  margin: 12px 0;
+}
+
+.nav-hint {
+  color: #555;
+  font-size: 11px;
+  margin-top: 16px;
+  line-height: 1.6;
+}
+
+/* ═══════════════════════════════════════════════
+   STATUS BAR - Persistent device status
+   20px height, always on top
+   ═══════════════════════════════════════════════ */
+
+.status-bar {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 20px;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  z-index: 90;
+  border-bottom: 1px solid var(--border-color);
+  font-variant-numeric: tabular-nums;
+  /* Same paper texture */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='%23f7f7f5'/%3E%3Crect width='1' height='1' fill='%23f4f4f2' x='2' y='0'/%3E%3Crect width='1' height='1' fill='%23f5f5f3' x='0' y='2'/%3E%3C/svg%3E");
+}
+
+/* Boot screen hides status bar */
+.page-boot-active ~ .status-bar-wrapper .status-bar {
+  display: none;
+}
+
+.status-bar .sb-time {
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-right: auto;
+}
+
+.status-bar .sb-icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-bar .sb-icon {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.status-bar .sb-icon svg {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.status-bar .sb-battery {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.status-bar .sb-battery-shell {
+  width: 20px;
+  height: 10px;
+  border: 1.2px solid var(--text-muted);
+  border-radius: 2px;
+  padding: 1px;
+  position: relative;
+}
+
+.status-bar .sb-battery-shell::after {
+  content: '';
+  position: absolute;
+  right: -3.5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 5px;
+  background: var(--text-muted);
+  border-radius: 0 1px 1px 0;
+}
+
+.status-bar .sb-battery-fill {
+  height: 100%;
+  background: var(--text-muted);
+  border-radius: 1px;
+  transition: width 0.3s;
+}
+
+.status-bar .sb-battery-text {
+  font-size: 10px;
+  color: var(--text-muted);
+  min-width: 24px;
+  text-align: right;
+}
+
+/* ═══════════════════════════════════════════════
+   PAGE SYSTEM - Each page is a full-screen layer
+   ═══════════════════════════════════════════════ */
+
+.page {
+  position: absolute;
+  top: 20px; left: 0;
+  width: 100%;
+  height: calc(100% - 20px);
+  background: var(--bg-primary);
+  display: none;
+  flex-direction: column;
+  /* E-Ink paper texture */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='%23f7f7f5'/%3E%3Crect width='1' height='1' fill='%23f4f4f2' x='2' y='0'/%3E%3Crect width='1' height='1' fill='%23f5f5f3' x='0' y='2'/%3E%3C/svg%3E");
+}
+
+.page.active { display: flex; }
+
+/* Boot screen is full-screen, no status bar offset */
+#page-boot {
+  top: 0;
+  height: 100%;
+}
+
+/* ── Common Header ── */
+.header {
+  height: 48px;
+  background: var(--ink-black);
+  color: var(--text-inverse);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 500;
+  z-index: 10;
+}
+
+.header .back-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-right: 8px;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.header .back-btn:hover { background: rgba(255,255,255,0.12); }
+
+.header .back-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--text-inverse);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.header .title { flex: 1; }
+
+.header .action-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.header .action-btn:hover { background: rgba(255,255,255,0.12); }
+
+.header .action-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: var(--text-inverse);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ═══════════════════════════════════════════════
+   PAGE 1: BOOT SCREEN
+   ═══════════════════════════════════════════════ */
+
+#page-boot {
+  justify-content: center;
+  align-items: center;
+  background: var(--bg-primary);
+}
+
+.boot-logo {
+  width: 100px;
+  height: 100px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.boot-logo svg {
+  width: 100%;
+  height: 100%;
+}
+
+.boot-title {
+  font-family: var(--font-reading);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  letter-spacing: 2px;
+}
+
+.boot-subtitle {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 48px;
+  letter-spacing: 1px;
+  font-weight: 300;
+}
+
+.boot-status {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.boot-progress {
+  width: 200px;
+  height: 3px;
+  background: var(--ink-light);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.boot-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--ink-dark);
+  border-radius: 2px;
+  animation: bootLoad 2.5s ease-in-out forwards;
+}
+
+@keyframes bootLoad {
+  0% { width: 0%; }
+  30% { width: 40%; }
+  60% { width: 70%; }
+  90% { width: 95%; }
+  100% { width: 100%; }
+}
+
+/* ═══════════════════════════════════════════════
+   PAGE 2: LIBRARY SCREEN
+   ═══════════════════════════════════════════════ */
+
+.library-subheader {
+  height: 36px;
+  background: var(--bg-subheader);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.library-subheader .book-count {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.library-subheader .book-count svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+}
+
+.library-subheader .sort-btn {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.1s;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.library-subheader .sort-btn:hover {
+  background: var(--bg-hover);
+}
+
+.book-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.book-item {
+  height: 96px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  cursor: pointer;
+  transition: background 0.08s;
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+}
+
+.book-item:hover {
+  background: var(--bg-hover);
+}
+
+.book-item:active {
+  background: var(--bg-selected);
+}
+
+.book-cover {
+  width: 52px;
+  height: 72px;
+  border: 1.5px solid var(--ink-dark);
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  flex-shrink: 0;
+  background: var(--bg-subheader);
+  position: relative;
+  overflow: hidden;
+}
+
+.book-cover .format-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-dark);
+  letter-spacing: 0.5px;
+}
+
+.book-cover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 10px 10px 0;
+  border-color: transparent var(--bg-primary) transparent transparent;
+}
+
+.book-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.book-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-reading);
+}
+
+.book-author {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-bar {
+  width: 160px;
+  height: 6px;
+  background: var(--ink-light);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--ink-dark);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+}
+
+/* Page indicator at bottom */
+.library-page-indicator {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+  background: var(--bg-primary);
+}
+
+.page-nav-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+  user-select: none;
+}
+
+.page-nav-btn:hover { background: var(--bg-hover); }
+
+.page-nav-btn.disabled {
+  color: var(--ink-light);
+  pointer-events: none;
+}
+
+.page-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════
+   PAGE 3: READING VIEW
+   ═══════════════════════════════════════════════ */
+
+#page-reader {
+  cursor: default;
+}
+
+.reader-header-bar {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.reader-content {
+  flex: 1;
+  padding: 20px 28px;
+  font-family: var(--font-reading);
+  font-size: 18px;
+  line-height: 1.8;
+  color: var(--text-primary);
+  overflow: hidden;
+  position: relative;
+}
+
+.reader-content p {
+  text-indent: 2em;
+  margin-bottom: 12px;
+  text-align: justify;
+}
+
+.reader-content p:first-child {
+  text-indent: 0;
+}
+
+.reader-content .chapter-title {
+  font-size: 22px;
+  font-weight: 700;
+  text-indent: 0;
+  margin-bottom: 20px;
+  text-align: left;
+  color: var(--text-primary);
+}
+
+/* Touch zones overlay (visible on hover) */
+.touch-zones {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.reader-content:hover .touch-zones {
+  opacity: 0.06;
+}
+
+.touch-zone {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--ink-black);
+  font-family: var(--font-ui);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.touch-zone-left { background: rgba(0,0,0,0.5); }
+.touch-zone-center { background: rgba(0,0,0,0.15); }
+.touch-zone-right { background: rgba(0,0,0,0.5); }
+
+.reader-footer {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+/* ═══════════════════════════════════════════════
+   PAGE 4: READING TOOLBAR (overlay on reader)
+   ═══════════════════════════════════════════════ */
+
+#page-toolbar {
+  background: transparent;
+}
+
+.toolbar-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.toolbar-top {
+  height: 48px;
+  background: var(--ink-black);
+  color: var(--text-inverse);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.toolbar-top .back-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-right: 8px;
+  border-radius: 4px;
+}
+
+.toolbar-top .back-btn:hover { background: rgba(255,255,255,0.12); }
+
+.toolbar-top .back-btn svg {
+  width: 20px; height: 20px;
+  fill: none; stroke: var(--text-inverse);
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.toolbar-top .title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.toolbar-top .bookmark-btn {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.toolbar-top .bookmark-btn:hover { background: rgba(255,255,255,0.12); }
+
+.toolbar-top .bookmark-btn svg {
+  width: 20px; height: 20px;
+  fill: none; stroke: var(--text-inverse);
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.toolbar-mask {
+  flex: 1;
+  background: rgba(200, 200, 195, 0.45);
+  cursor: pointer;
+}
+
+.toolbar-progress-section {
+  height: 48px;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.toolbar-progress-track {
+  flex: 1;
+  height: 8px;
+  background: var(--ink-light);
+  border-radius: 4px;
+  position: relative;
+  cursor: pointer;
+}
+
+.toolbar-progress-fill {
+  height: 100%;
+  background: var(--ink-dark);
+  border-radius: 4px;
+  width: 42%;
+  position: relative;
+}
+
+.toolbar-progress-handle {
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  background: var(--ink-black);
+  border-radius: 50%;
+  border: 2px solid var(--bg-primary);
+  cursor: grab;
+}
+
+.toolbar-progress-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+
+.toolbar-actions {
+  height: 72px;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.toolbar-action-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-right: 1px solid var(--border-color);
+}
+
+.toolbar-action-btn:last-child { border-right: none; }
+.toolbar-action-btn:hover { background: var(--bg-hover); }
+.toolbar-action-btn:active { background: var(--bg-selected); }
+
+.toolbar-action-btn svg {
+  width: 24px; height: 24px;
+  fill: none; stroke: var(--ink-dark);
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.toolbar-action-btn span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ═══════════════════════════════════════════════
+   PAGE 5: READING SETTINGS
+   ═══════════════════════════════════════════════ */
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.setting-group {
+  margin-bottom: 28px;
+}
+
+.setting-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.setting-control {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Selector row */
+.setting-selector {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.setting-selector:hover { background: var(--bg-hover); }
+
+.setting-selector .label { flex: 1; font-size: 15px; color: var(--text-primary); }
+
+.setting-selector .value {
+  font-size: 14px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.setting-selector .value svg {
+  width: 16px; height: 16px;
+  fill: none; stroke: var(--text-muted);
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Size control (A- / value / A+) */
+.size-control {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.size-btn {
+  width: 48px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  transition: background 0.1s;
+  user-select: none;
+}
+
+.size-btn:hover { background: var(--bg-hover); }
+.size-btn:active { background: var(--bg-selected); }
+
+.size-value {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Slider */
+.slider-row {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+}
+
+.slider-min, .slider-max {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+}
+
+.slider-max { text-align: right; }
+
+.slider-track {
+  flex: 1;
+  height: 4px;
+  background: var(--ink-light);
+  border-radius: 2px;
+  position: relative;
+  cursor: pointer;
+}
+
+.slider-filled {
+  height: 100%;
+  background: var(--ink-dark);
+  border-radius: 2px;
+}
+
+.slider-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background: var(--ink-black);
+  border-radius: 50%;
+  border: 2px solid var(--bg-primary);
+  cursor: grab;
+}
+
+/* Button group (3-choice) */
+.btn-group {
+  display: flex;
+  padding: 6px;
+  gap: 6px;
+}
+
+.btn-group-item {
+  flex: 1;
+  height: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.1s;
+  border: 1px solid transparent;
+  background: var(--bg-subheader);
+}
+
+.btn-group-item:hover {
+  background: var(--bg-hover);
+}
+
+.btn-group-item.selected {
+  background: var(--ink-black);
+  color: var(--text-inverse);
+}
+
+.btn-group-item .btn-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.btn-group-item .btn-sublabel {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* Preview */
+.preview-box {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 4px;
+  min-height: 160px;
+  font-family: var(--font-reading);
+  font-size: 18px;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+/* Apply button */
+.apply-btn {
+  width: 100%;
+  height: 48px;
+  background: var(--ink-black);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: opacity 0.1s;
+  margin-top: 20px;
+}
+
+.apply-btn:hover { opacity: 0.85; }
+.apply-btn:active { opacity: 0.7; }
+
+/* ═══════════════════════════════════════════════
+   PAGE 6: TABLE OF CONTENTS
+   ═══════════════════════════════════════════════ */
+
+.toc-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.toc-section-title {
+  padding: 14px 24px 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-reading);
+}
+
+.toc-item {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px 0 48px;
+  cursor: pointer;
+  transition: background 0.08s;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.toc-item:hover { background: var(--bg-hover); }
+
+.toc-item.current {
+  background: var(--bg-selected);
+  position: relative;
+}
+
+.toc-item.current::before {
+  content: '';
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: var(--ink-black);
+  border-radius: 50%;
+}
+
+.toc-item .chapter-name { flex: 1; }
+
+.toc-item .page-num {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-left: 12px;
+}
+
+/* ═══════════════════════════════════════════════
+   PAGE 7: GLOBAL SETTINGS
+   ═══════════════════════════════════════════════ */
+
+.global-settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+}
+
+.gs-section-title {
+  padding: 12px 24px 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
+.gs-item {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.08s;
+}
+
+.gs-item:hover { background: var(--bg-hover); }
+
+.gs-item .gs-label {
+  flex: 1;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.gs-item .gs-value {
+  font-size: 14px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gs-item .gs-value svg {
+  width: 16px; height: 16px;
+  fill: none; stroke: var(--text-muted);
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.gs-item.no-interact {
+  cursor: default;
+}
+
+.gs-item.no-interact:hover { background: transparent; }
+
+/* ═══════════════════════════════════════════════
+   PAGE 8: FONT SELECTOR (Modal)
+   ═══════════════════════════════════════════════ */
+
+#page-font-selector {
+  background: rgba(200, 200, 195, 0.5);
+  justify-content: center;
+  align-items: center;
+}
+
+.font-modal {
+  width: 460px;
+  background: var(--bg-primary);
+  border: 2px solid var(--ink-dark);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+.font-modal-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.font-option {
+  padding: 14px 20px;
+  cursor: pointer;
+  transition: background 0.08s;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.font-option:hover { background: var(--bg-hover); }
+
+.font-option.selected {
+  background: var(--bg-selected);
+}
+
+.font-option-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.radio-dot {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink-dark);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.font-option.selected .radio-dot {
+  border-color: var(--ink-black);
+}
+
+.radio-dot-inner {
+  width: 10px;
+  height: 10px;
+  background: var(--ink-black);
+  border-radius: 50%;
+  display: none;
+}
+
+.font-option.selected .radio-dot-inner {
+  display: block;
+}
+
+.font-option-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.font-option-preview {
+  margin-left: 28px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.font-modal-footer {
+  padding: 12px 20px;
+}
+
+.font-confirm-btn {
+  width: 100%;
+  height: 44px;
+  background: var(--ink-black);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+
+.font-confirm-btn:hover { opacity: 0.85; }
+
+/* ═══════════════════════════════════════════════
+   E-INK TRANSITION EFFECT
+   ═══════════════════════════════════════════════ */
+
+.eink-flash {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: var(--ink-black);
+  z-index: 100;
+  pointer-events: none;
+  animation: einkFlash 0.4s ease-out forwards;
+}
+
+@keyframes einkFlash {
+  0% { opacity: 0.9; }
+  40% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+
+/* ── Scrollbar styling ── */
+.book-list::-webkit-scrollbar,
+.toc-list::-webkit-scrollbar,
+.settings-body::-webkit-scrollbar,
+.global-settings-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.book-list::-webkit-scrollbar-track,
+.toc-list::-webkit-scrollbar-track,
+.settings-body::-webkit-scrollbar-track,
+.global-settings-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.book-list::-webkit-scrollbar-thumb,
+.toc-list::-webkit-scrollbar-thumb,
+.settings-body::-webkit-scrollbar-thumb,
+.global-settings-body::-webkit-scrollbar-thumb {
+  background: var(--ink-light);
+  border-radius: 2px;
+}
+
+/* ── Responsive for smaller screens ── */
+@media (max-width: 900px) {
+  .device-wrapper {
+    flex-direction: column;
+    align-items: center;
+  }
+  .nav-panel {
+    position: static;
+    width: 100%;
+    max-width: 580px;
+  }
+  .nav-panel h3 { display: inline-block; }
+}
+</style>
+</head>
+<body>
+
+<div class="device-wrapper">
+  <!-- Navigation Panel -->
+  <nav class="nav-panel">
+    <h3>Pages</h3>
+    <button class="nav-btn active" onclick="showPage('boot')">
+      <span class="nav-icon">1</span> 启动画面
+    </button>
+    <button class="nav-btn" onclick="showPage('library')">
+      <span class="nav-icon">2</span> 书库
+    </button>
+    <button class="nav-btn" onclick="showPage('reader')">
+      <span class="nav-icon">3</span> 阅读界面
+    </button>
+    <button class="nav-btn" onclick="showPage('toolbar')">
+      <span class="nav-icon">4</span> 阅读工具栏
+    </button>
+    <div class="nav-divider"></div>
+    <button class="nav-btn" onclick="showPage('reading-settings')">
+      <span class="nav-icon">5</span> 阅读设置
+    </button>
+    <button class="nav-btn" onclick="showPage('toc')">
+      <span class="nav-icon">6</span> 目录
+    </button>
+    <button class="nav-btn" onclick="showPage('global-settings')">
+      <span class="nav-icon">7</span> 全局设置
+    </button>
+    <button class="nav-btn" onclick="showPage('font-selector')">
+      <span class="nav-icon">8</span> 字体选择器
+    </button>
+    <div class="nav-divider"></div>
+    <div class="nav-hint">
+      点击页面名称进行导航。<br>
+      交互元素可点击操作。
+    </div>
+  </nav>
+
+  <!-- Device Frame -->
+  <div class="device-frame">
+    <div class="device-bezel-label">Parchment &mdash; M5Paper S3</div>
+    <div class="screen" id="screen">
+
+      <!-- ══ PAGE 1: BOOT SCREEN ══ -->
+      <div id="page-boot" class="page active">
+        <div class="boot-logo">
+          <svg viewBox="0 0 100 100" fill="none">
+            <!-- Book icon -->
+            <path d="M20 80V25c0-5.5 4.5-10 10-10h40c5.5 0 10 4.5 10 10v55" stroke="#111" stroke-width="2.5" fill="none"/>
+            <path d="M20 80h60" stroke="#111" stroke-width="2.5"/>
+            <line x1="50" y1="20" x2="50" y2="75" stroke="#111" stroke-width="1.5"/>
+            <!-- Pages -->
+            <path d="M30 30h15M30 38h12M30 46h14M30 54h10" stroke="#888" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M55 30h15M55 38h12M55 46h14M55 54h10" stroke="#888" stroke-width="1.2" stroke-linecap="round"/>
+            <!-- Decorative quill -->
+            <path d="M68 12c-4 6-8 14-6 22 1 5 3 8 3 8" stroke="#3a3a3a" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+            <path d="M65 42l3-2" stroke="#3a3a3a" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="boot-title">Parchment</div>
+        <div class="boot-subtitle">墨水屏阅读器</div>
+        <div class="boot-status">正在初始化...</div>
+        <div class="boot-progress">
+          <div class="boot-progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- ══ PAGE 2: LIBRARY ══ -->
+      <div id="page-library" class="page">
+        <div class="header">
+          <div class="action-btn" style="margin-right: 4px;">
+            <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+          </div>
+          <span class="title">Parchment</span>
+          <div class="action-btn" onclick="showPage('global-settings')">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
+        </div>
+        <div class="library-subheader">
+          <div class="book-count">
+            <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <span>共 8 本</span>
+          </div>
+          <div class="sort-btn">
+            按名称排序
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+        <div class="book-list" id="book-list">
+          <!-- Books injected by JS -->
+        </div>
+        <div class="library-page-indicator">
+          <div class="page-nav-btn disabled">&larr; 上一页</div>
+          <div class="page-label">1 / 1</div>
+          <div class="page-nav-btn disabled">下一页 &rarr;</div>
+        </div>
+      </div>
+
+      <!-- ══ PAGE 3: READING VIEW ══ -->
+      <div id="page-reader" class="page">
+        <div class="reader-header-bar">
+          <span>第三章 &middot; 黑暗森林</span>
+        </div>
+        <div class="reader-content">
+          <p class="chapter-title">第三章 &nbsp; 黑暗森林</p>
+          <p>宇宙就是一座黑暗森林，每个文明都是带枪的猎人，像幽灵般潜行于林间，轻轻拨开挡路的树枝，竭力不让脚步发出一点儿声音，连呼吸都必须小心翼翼。</p>
+          <p>这就是黑暗森林法则。罗辑盯着天花板，脑中飞速运转着这一理论的全部含义。如果宇宙中每个文明都是猎人，那么人类刚刚做的事情，就是对着虚空大声呐喊。</p>
+          <p>他想起了叶文洁的第一次发射，那个穿越光年的信号最终到达了三体世界。这一举动就此决定了人类的命运。而现在，作为面壁者，他被期望找到一种方法来拯救这个已经被判了死刑的文明。</p>
+          <p>那份责任的重量如同中子星的引力般压在他身上。一个人怎么能对抗宇宙的沉默？在面对一个能读懂你每个想法的敌人时，策略又怎么能取得胜利？</p>
+          <p>但黑暗森林有它自己的规则。在那些规则中，罗辑开始看到了一些其他人都没有注意到的东西——一个隐藏在沉默本身之中的规律。</p>
+
+          <div class="touch-zones">
+            <div class="touch-zone touch-zone-left">上一页</div>
+            <div class="touch-zone touch-zone-center" onclick="showPage('toolbar')">菜单</div>
+            <div class="touch-zone touch-zone-right">下一页</div>
+          </div>
+        </div>
+        <div class="reader-footer">
+          <span>三体 &middot; 刘慈欣</span>
+          <span>42 / 380 &nbsp; 11%</span>
+        </div>
+      </div>
+
+      <!-- ══ PAGE 4: READING TOOLBAR ══ -->
+      <div id="page-toolbar" class="page">
+        <!-- Background reader content (dimmed) -->
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.4;">
+          <div class="reader-header-bar">
+            <span>第三章 &middot; 黑暗森林</span>
+          </div>
+          <div class="reader-content" style="pointer-events:none;">
+            <p class="chapter-title" style="font-family:var(--font-reading);">第三章 &nbsp; 黑暗森林</p>
+            <p style="font-family:var(--font-reading);font-size:18px;line-height:1.8;text-indent:2em;margin-bottom:12px;text-align:justify;">宇宙就是一座黑暗森林，每个文明都是带枪的猎人，像幽灵般潜行于林间...</p>
+          </div>
+        </div>
+
+        <div class="toolbar-overlay">
+          <div class="toolbar-top">
+            <div class="back-btn" onclick="showPage('library')">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            </div>
+            <span class="title">三体</span>
+            <div class="bookmark-btn">
+              <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            </div>
+          </div>
+
+          <div class="toolbar-mask" onclick="showPage('reader')"></div>
+
+          <div class="toolbar-progress-section">
+            <div class="toolbar-progress-track">
+              <div class="toolbar-progress-fill">
+                <div class="toolbar-progress-handle"></div>
+              </div>
+            </div>
+            <div class="toolbar-progress-label">42%</div>
+          </div>
+
+          <div class="toolbar-actions">
+            <div class="toolbar-action-btn" onclick="showPage('toc')">
+              <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>目录</span>
+            </div>
+            <div class="toolbar-action-btn" onclick="showPage('reading-settings')">
+              <svg viewBox="0 0 24 24"><text x="3" y="18" font-size="14" font-weight="600" font-family="serif" fill="#3a3a3a" stroke="none">Aa</text></svg>
+              <span>设置</span>
+            </div>
+            <div class="toolbar-action-btn">
+              <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              <span>书签</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ PAGE 5: READING SETTINGS ══ -->
+      <div id="page-reading-settings" class="page">
+        <div class="header">
+          <div class="back-btn" onclick="showPage('toolbar')">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </div>
+          <span class="title">阅读设置</span>
+        </div>
+        <div class="settings-body">
+
+          <div class="setting-group">
+            <div class="setting-label">字体</div>
+            <div class="setting-control">
+              <div class="setting-selector" onclick="showPage('font-selector')">
+                <span class="label">字体</span>
+                <span class="value">
+                  霞鹜文楷
+                  <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-label">字号</div>
+            <div class="setting-control">
+              <div class="size-control">
+                <div class="size-btn" id="size-dec" onclick="adjustSize(-2)">A&minus;</div>
+                <div class="size-value" id="size-display">20px</div>
+                <div class="size-btn" id="size-inc" onclick="adjustSize(2)">A+</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-label">行距</div>
+            <div class="setting-control">
+              <div class="slider-row">
+                <span class="slider-min">1.0</span>
+                <div class="slider-track">
+                  <div class="slider-filled" style="width: 40%;"></div>
+                  <div class="slider-thumb" style="left: 40%;"></div>
+                </div>
+                <span class="slider-max">2.5</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-label">段间距</div>
+            <div class="setting-control">
+              <div class="slider-row">
+                <span class="slider-min">0</span>
+                <div class="slider-track">
+                  <div class="slider-filled" style="width: 33%;"></div>
+                  <div class="slider-thumb" style="left: 33%;"></div>
+                </div>
+                <span class="slider-max">24px</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-label">页边距</div>
+            <div class="setting-control">
+              <div class="btn-group">
+                <div class="btn-group-item" onclick="selectMargin(this)">
+                  <span class="btn-label">窄</span>
+                  <span class="btn-sublabel">16px</span>
+                </div>
+                <div class="btn-group-item selected" onclick="selectMargin(this)">
+                  <span class="btn-label">中</span>
+                  <span class="btn-sublabel">24px</span>
+                </div>
+                <div class="btn-group-item" onclick="selectMargin(this)">
+                  <span class="btn-label">宽</span>
+                  <span class="btn-sublabel">36px</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-label">预览</div>
+            <div class="preview-box" id="preview-box">
+              这是一段预览文字。用于展示当前字体、字号和行距的效果。The quick brown fox jumps over the lazy dog. 1234567890
+            </div>
+          </div>
+
+          <button class="apply-btn" onclick="showPage('toolbar')">应用设置</button>
+        </div>
+      </div>
+
+      <!-- ══ PAGE 6: TABLE OF CONTENTS ══ -->
+      <div id="page-toc" class="page">
+        <div class="header">
+          <div class="back-btn" onclick="showPage('toolbar')">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </div>
+          <span class="title">目录</span>
+        </div>
+        <div class="toc-list">
+          <div class="toc-section-title">第一部 &nbsp; 疯狂年代</div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第一章 &nbsp; 科学边界</span>
+            <span class="page-num">p.1</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第二章 &nbsp; 射手与农场主</span>
+            <span class="page-num">p.15</span>
+          </div>
+          <div class="toc-item current" onclick="showPage('reader')">
+            <span class="chapter-name">第三章 &nbsp; 黑暗森林</span>
+            <span class="page-num">p.42</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第四章 &nbsp; 三体问题</span>
+            <span class="page-num">p.68</span>
+          </div>
+
+          <div class="toc-section-title">第二部 &nbsp; 人类的黎明</div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第五章 &nbsp; 面壁者</span>
+            <span class="page-num">p.95</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第六章 &nbsp; 咒语</span>
+            <span class="page-num">p.120</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第七章 &nbsp; 冬眠</span>
+            <span class="page-num">p.148</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第八章 &nbsp; 天启</span>
+            <span class="page-num">p.175</span>
+          </div>
+
+          <div class="toc-section-title">第三部 &nbsp; 黑暗森林</div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第九章 &nbsp; 二维宇宙</span>
+            <span class="page-num">p.200</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第十章 &nbsp; 引力波</span>
+            <span class="page-num">p.228</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第十一章 &nbsp; 威慑</span>
+            <span class="page-num">p.256</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第十二章 &nbsp; 最终之战</span>
+            <span class="page-num">p.290</span>
+          </div>
+          <div class="toc-item" onclick="showPage('reader')">
+            <span class="chapter-name">第十三章 &nbsp; 尾声</span>
+            <span class="page-num">p.340</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ PAGE 7: GLOBAL SETTINGS ══ -->
+      <div id="page-global-settings" class="page">
+        <div class="header">
+          <div class="back-btn" onclick="showPage('library')">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </div>
+          <span class="title">设置</span>
+        </div>
+        <div class="global-settings-body">
+
+          <div class="gs-section-title">阅读</div>
+          <div class="gs-item" onclick="showPage('font-selector')">
+            <span class="gs-label">默认字体</span>
+            <span class="gs-value">
+              霞鹜文楷
+              <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </span>
+          </div>
+          <div class="gs-item">
+            <span class="gs-label">默认字号</span>
+            <span class="gs-value">20px</span>
+          </div>
+          <div class="gs-item">
+            <span class="gs-label">全刷间隔</span>
+            <span class="gs-value">每 5 页</span>
+          </div>
+
+          <div class="gs-section-title">系统</div>
+          <div class="gs-item">
+            <span class="gs-label">休眠超时</span>
+            <span class="gs-value">30 秒</span>
+          </div>
+          <div class="gs-item">
+            <span class="gs-label">屏幕旋转</span>
+            <span class="gs-value">自动</span>
+          </div>
+
+          <div class="gs-section-title">关于</div>
+          <div class="gs-item no-interact">
+            <span class="gs-label">版本</span>
+            <span class="gs-value">v0.1.0</span>
+          </div>
+          <div class="gs-item no-interact">
+            <span class="gs-label">硬件</span>
+            <span class="gs-value">M5Paper S3</span>
+          </div>
+          <div class="gs-item no-interact">
+            <span class="gs-label">存储</span>
+            <span class="gs-value">2.1 GB / 8 GB</span>
+          </div>
+          <div class="gs-item no-interact">
+            <span class="gs-label">显示</span>
+            <span class="gs-value">540 x 960</span>
+          </div>
+          <div class="gs-item no-interact">
+            <span class="gs-label">框架</span>
+            <span class="gs-value">InkUI / ESP-IDF 5.5</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ PAGE 8: FONT SELECTOR ══ -->
+      <div id="page-font-selector" class="page">
+        <div class="font-modal">
+          <div class="font-modal-header">选择字体</div>
+
+          <div class="font-option selected" onclick="selectFont(this)">
+            <div class="font-option-top">
+              <div class="radio-dot"><div class="radio-dot-inner"></div></div>
+              <div class="font-option-name">霞鹜文楷</div>
+            </div>
+            <div class="font-option-preview" style="font-family: 'Noto Serif SC', serif;">
+              AaBb 你好世界 1234
+            </div>
+          </div>
+
+          <div class="font-option" onclick="selectFont(this)">
+            <div class="font-option-top">
+              <div class="radio-dot"><div class="radio-dot-inner"></div></div>
+              <div class="font-option-name">霞鹜文楷 Mono</div>
+            </div>
+            <div class="font-option-preview" style="font-family: monospace;">
+              AaBb 你好世界 1234
+            </div>
+          </div>
+
+          <div class="font-option" onclick="selectFont(this)">
+            <div class="font-option-top">
+              <div class="radio-dot"><div class="radio-dot-inner"></div></div>
+              <div class="font-option-name">Noto Serif SC</div>
+            </div>
+            <div class="font-option-preview" style="font-family: 'Noto Serif SC', serif;">
+              AaBb 你好世界 1234
+            </div>
+          </div>
+
+          <div class="font-option" onclick="selectFont(this)">
+            <div class="font-option-top">
+              <div class="radio-dot"><div class="radio-dot-inner"></div></div>
+              <div class="font-option-name">Source Serif 4</div>
+            </div>
+            <div class="font-option-preview" style="font-family: 'Source Serif 4', Georgia, serif;">
+              AaBb 你好世界 1234
+            </div>
+          </div>
+
+          <div class="font-modal-footer">
+            <button class="font-confirm-btn" onclick="showPage('reading-settings')">确定</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ STATUS BAR (persistent, above all pages) ══ -->
+      <div class="status-bar" id="status-bar">
+        <span class="sb-time" id="sb-time">14:30</span>
+        <div class="sb-icons">
+          <!-- Bluetooth -->
+          <div class="sb-icon" title="Bluetooth">
+            <svg width="10" height="14" viewBox="0 0 10 14">
+              <path d="M1 3.5L7.5 8.5L3.5 12.5V1.5L7.5 5.5L1 10.5" stroke-width="1.3"/>
+            </svg>
+          </div>
+          <!-- Wi-Fi -->
+          <div class="sb-icon" title="Wi-Fi">
+            <svg width="16" height="12" viewBox="0 0 16 12">
+              <path d="M1.5 3.5C4 1.2 7.2 0 8 0c0.8 0 4 1.2 6.5 3.5" fill="none" stroke-width="1.3"/>
+              <path d="M3.5 6C5.2 4.5 6.8 3.8 8 3.8c1.2 0 2.8 0.7 4.5 2.2" fill="none" stroke-width="1.3"/>
+              <path d="M5.5 8.5C6.5 7.6 7.3 7.2 8 7.2c0.7 0 1.5 0.4 2.5 1.3" fill="none" stroke-width="1.3"/>
+              <circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/>
+            </svg>
+          </div>
+          <!-- Battery -->
+          <div class="sb-battery">
+            <div class="sb-battery-shell">
+              <div class="sb-battery-fill" id="sb-battery-fill" style="width: 72%;"></div>
+            </div>
+            <span class="sb-battery-text" id="sb-battery-text">72%</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /screen -->
+  </div><!-- /device-frame -->
+</div><!-- /device-wrapper -->
+
+<script>
+// ═══════════════════════════════════════════════
+// PARCHMENT PROTOTYPE - INTERACTION LOGIC
+// ═══════════════════════════════════════════════
+
+const books = [
+  { title: '三体',                author: '刘慈欣',              format: 'TXT',  progress: 80 },
+  { title: '傲慢与偏见',           author: '简·奥斯汀',           format: 'TXT',  progress: 20 },
+  { title: '百年孤独',             author: '加西亚·马尔克斯',     format: 'TXT',  progress: 0 },
+  { title: '挪威的森林',           author: '村上春树',            format: 'TXT',  progress: 60 },
+  { title: '银河系搭车客指南',     author: '道格拉斯·亚当斯',     format: 'TXT',  progress: 45 },
+  { title: '1984',                author: '乔治·奥威尔',         format: 'TXT',  progress: 92 },
+  { title: '沙丘',                author: '弗兰克·赫伯特',       format: 'TXT',  progress: 33 },
+  { title: '美丽新世界',           author: '阿道司·赫胥黎',       format: 'TXT',  progress: 15 },
+];
+
+function initBookList() {
+  const list = document.getElementById('book-list');
+  list.innerHTML = books.map(b => `
+    <div class="book-item" onclick="showPage('reader')">
+      <div class="book-cover">
+        <span class="format-tag">${b.format}</span>
+      </div>
+      <div class="book-info">
+        <div class="book-title">${b.title}</div>
+        <div class="book-author">${b.author}</div>
+        <div class="book-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${b.progress}%"></div>
+          </div>
+          <span class="progress-text">${b.progress}%</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Page Navigation ──
+
+let currentPage = 'boot';
+
+function showPage(pageId) {
+  if (pageId === currentPage) return;
+
+  const screen = document.getElementById('screen');
+
+  // E-Ink flash effect
+  const flash = document.createElement('div');
+  flash.className = 'eink-flash';
+  screen.appendChild(flash);
+  setTimeout(() => flash.remove(), 450);
+
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+  // Show target page
+  const target = document.getElementById('page-' + pageId);
+  if (target) {
+    target.classList.add('active');
+  }
+
+  // Update nav buttons
+  document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+  const navBtns = document.querySelectorAll('.nav-btn');
+  const pageOrder = ['boot', 'library', 'reader', 'toolbar', 'reading-settings', 'toc', 'global-settings', 'font-selector'];
+  const idx = pageOrder.indexOf(pageId);
+  if (idx >= 0 && navBtns[idx]) {
+    navBtns[idx].classList.add('active');
+  }
+
+  // Reset boot animation when visiting boot page
+  if (pageId === 'boot') {
+    const fill = document.querySelector('.boot-progress-fill');
+    fill.style.animation = 'none';
+    fill.offsetHeight; // trigger reflow
+    fill.style.animation = 'bootLoad 2.5s ease-in-out forwards';
+  }
+
+  currentPage = pageId;
+  updateStatusBarVisibility();
+}
+
+// ── Font Size Control ──
+
+let fontSize = 20;
+
+function adjustSize(delta) {
+  fontSize = Math.max(14, Math.min(32, fontSize + delta));
+  document.getElementById('size-display').textContent = fontSize + 'px';
+  document.getElementById('preview-box').style.fontSize = fontSize + 'px';
+}
+
+// ── Margin Selection ──
+
+function selectMargin(el) {
+  el.parentElement.querySelectorAll('.btn-group-item').forEach(item => {
+    item.classList.remove('selected');
+  });
+  el.classList.add('selected');
+}
+
+// ── Font Selection ──
+
+function selectFont(el) {
+  el.parentElement.querySelectorAll('.font-option').forEach(opt => {
+    opt.classList.remove('selected');
+  });
+  el.classList.add('selected');
+}
+
+// ── Status Bar ──
+
+function updateStatusBar() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  document.getElementById('sb-time').textContent = hours + ':' + minutes;
+}
+
+function updateStatusBarVisibility() {
+  const statusBar = document.getElementById('status-bar');
+  if (currentPage === 'boot') {
+    statusBar.style.display = 'none';
+  } else {
+    statusBar.style.display = 'flex';
+  }
+}
+
+// Update clock every 30 seconds
+updateStatusBar();
+setInterval(updateStatusBar, 30000);
+
+// ── Initialize ──
+
+initBookList();
+updateStatusBarVisibility();
+</script>
+
+</body>
+</html>
