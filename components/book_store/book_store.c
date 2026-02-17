@@ -10,10 +10,14 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include "esp_log.h"
 
 static const char *TAG = "book_store";
+
+/** 书籍扫描目录。 */
+#define BOOKS_DIR SD_MOUNT_POINT "/book"
 
 static book_info_t s_books[BOOK_STORE_MAX_BOOKS];
 static size_t s_count = 0;
@@ -38,19 +42,33 @@ esp_err_t book_store_scan(void) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    DIR *dir = opendir(SD_MOUNT_POINT);
+    /* 若 /books 目录不存在则自动创建 */
+    struct stat st_dir;
+    if (stat(BOOKS_DIR, &st_dir) != 0) {
+        if (mkdir(BOOKS_DIR, 0755) == 0) {
+            ESP_LOGI(TAG, "Created %s", BOOKS_DIR);
+        } else {
+            ESP_LOGW(TAG, "Failed to create %s", BOOKS_DIR);
+        }
+    }
+
+    ESP_LOGI(TAG, "Opening dir: %s", BOOKS_DIR);
+    DIR *dir = opendir(BOOKS_DIR);
     if (!dir) {
-        ESP_LOGW(TAG, "Failed to open %s", SD_MOUNT_POINT);
+        ESP_LOGW(TAG, "Failed to open %s", BOOKS_DIR);
         return ESP_ERR_INVALID_STATE;
     }
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL && s_count < BOOK_STORE_MAX_BOOKS) {
+        ESP_LOGI(TAG, "Entry: name=%s type=%d", entry->d_name, entry->d_type);
         /* 跳过目录 */
         if (entry->d_type == DT_DIR) {
+            ESP_LOGI(TAG, "  -> skipped (directory)");
             continue;
         }
         if (!is_txt_file(entry->d_name)) {
+            ESP_LOGI(TAG, "  -> skipped (not .txt)");
             continue;
         }
 
@@ -59,7 +77,7 @@ esp_err_t book_store_scan(void) {
         book->name[BOOK_NAME_MAX_LEN - 1] = '\0';
 
         snprintf(book->path, BOOK_PATH_MAX_LEN, "%s/%s",
-                 SD_MOUNT_POINT, entry->d_name);
+                 BOOKS_DIR, entry->d_name);
 
         /* 获取文件大小 */
         struct stat st;

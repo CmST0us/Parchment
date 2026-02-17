@@ -2,7 +2,7 @@
  * @file book_store.h
  * @brief 书籍管理 — SD 卡 TXT 文件扫描与列表维护。
  *
- * 扫描 /sdcard 根目录下的 .txt 文件，提供书籍列表查询和排序功能。
+ * 扫描 /sdcard/books 目录下的 .txt 文件，提供书籍列表查询和排序功能。
  */
 
 #ifndef BOOK_STORE_H
@@ -41,7 +41,7 @@ typedef struct {
 /**
  * @brief 扫描 SD 卡根目录的 TXT 文件。
  *
- * 清空已有列表，重新遍历 /sdcard 根目录筛选 .txt 文件。
+ * 清空已有列表，重新遍历 /sdcard/books 目录筛选 .txt 文件。
  * 最多保留 BOOK_STORE_MAX_BOOKS 本。
  *
  * @return ESP_OK 成功（含 0 本书的情况），
