@@ -91,6 +91,16 @@ void RenderEngine::drawView(View* view, bool forced) {
         Canvas canvas(fb_, sf);
         if (view->backgroundColor() != Color::Clear) {
             canvas.clear(view->backgroundColor());
+        } else if (!forced) {
+            // 透明 View 自身内容变化时，用最近祖先的背景色清除旧内容
+            uint8_t inheritedBg = Color::White;
+            for (View* p = view->parent(); p; p = p->parent()) {
+                if (p->backgroundColor() != Color::Clear) {
+                    inheritedBg = p->backgroundColor();
+                    break;
+                }
+            }
+            canvas.clear(inheritedBg);
         }
         view->onDraw(canvas);
 
