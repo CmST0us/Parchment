@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parchment Reader — Interactive Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@300;400;700&family=LXGW+WenKai+Mono+TC:wght@300;400;700&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════
+   PARCHMENT READER PROTOTYPE
+   540x960 · 16-level grayscale · Authentic E-Ink simulation
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* E-Ink 16-level grayscale — mapped to hex */
+  --g0:  #080808;  /* 0x00 BLACK */
+  --g2:  #222222;  /* 0x20 */
+  --g3:  #333333;  /* 0x30 DARK */
+  --g5:  #555555;  /* 0x50 */
+  --g8:  #888888;  /* 0x80 MEDIUM */
+  --gA:  #aaaaaa;  /* 0xA0 */
+  --gC:  #cccccc;  /* 0xC0 LIGHT */
+  --gD:  #dddddd;  /* 0xD0 */
+  --gF:  #f0f0ee;  /* 0xF0 WHITE (paper) */
+
+  --font-reading: 'LXGW WenKai TC', 'Noto Serif SC', Georgia, serif;
+  --font-ui: 'LXGW WenKai Mono TC', 'Noto Sans SC', system-ui, sans-serif;
+
+  --screen-w: 540px;
+  --screen-h: 960px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #1a1a1d;
+  font-family: var(--font-ui);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 24px 16px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ── Device Frame ── */
+.device-container {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.device-frame {
+  width: calc(var(--screen-w) + 40px);
+  background: #111114;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow:
+    0 8px 40px rgba(0,0,0,0.6),
+    0 1px 0 rgba(255,255,255,0.03) inset;
+  flex-shrink: 0;
+}
+
+.device-label {
+  text-align: center;
+  color: #555;
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  font-weight: 300;
+}
+
+.screen {
+  width: var(--screen-w);
+  height: var(--screen-h);
+  background: var(--gF);
+  position: relative;
+  overflow: hidden;
+  border-radius: 3px;
+  /* Paper micro-texture */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Crect width='6' height='6' fill='%23f0f0ee'/%3E%3Crect width='1' height='1' fill='%23ededeb' x='1' y='0'/%3E%3Crect width='1' height='1' fill='%23eeeeec' x='4' y='3'/%3E%3Crect width='1' height='1' fill='%23efefed' x='0' y='5'/%3E%3C/svg%3E");
+}
+
+/* ── Status Bar — 20px ── */
+.status-bar {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 20px;
+  background: var(--gF);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--g8);
+  z-index: 50;
+  border-bottom: 1px solid var(--gC);
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-time { font-weight: 500; color: var(--g3); margin-right: auto; }
+
+.sb-icons { display: flex; align-items: center; gap: 8px; }
+
+.sb-battery { display: flex; align-items: center; gap: 3px; }
+
+.sb-battery-shell {
+  width: 18px; height: 9px;
+  border: 1.2px solid var(--g8);
+  border-radius: 2px;
+  padding: 1px;
+  position: relative;
+}
+
+.sb-battery-shell::after {
+  content: '';
+  position: absolute;
+  right: -3px; top: 50%;
+  transform: translateY(-50%);
+  width: 2px; height: 4px;
+  background: var(--g8);
+  border-radius: 0 1px 1px 0;
+}
+
+.sb-battery-fill {
+  height: 100%;
+  width: 72%;
+  background: var(--g8);
+  border-radius: 1px;
+}
+
+.sb-battery-text {
+  font-size: 10px;
+  color: var(--g8);
+}
+
+/* ── Page Layers ── */
+.page-layer {
+  position: absolute;
+  top: 20px; left: 0;
+  width: 100%;
+  height: calc(100% - 20px);
+  display: none;
+}
+
+.page-layer.active { display: flex; flex-direction: column; }
+
+/* ═══════════════════════════════════════════════
+   HEADER BAR — Compact top bar with back + title
+   ═══════════════════════════════════════════════ */
+
+.reader-header {
+  height: 48px;
+  background: var(--g0);
+  color: var(--gF);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.reader-header .back-btn {
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s;
+}
+
+.reader-header .back-btn:hover { background: rgba(255,255,255,0.1); }
+
+.reader-header .back-btn svg {
+  width: 20px; height: 20px;
+  fill: none; stroke: var(--gF);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.reader-header .title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+  margin-left: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ═══════════════════════════════════════════════
+   READER CONTENT — Main reading area
+   ═══════════════════════════════════════════════ */
+
+.reader-sub-header {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--margin, 24px);
+  font-size: 12px;
+  color: var(--g8);
+  flex-shrink: 0;
+  font-family: var(--font-ui);
+}
+
+.reader-body {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+}
+
+.reader-text {
+  position: absolute;
+  top: 4px;
+  left: var(--margin, 24px);
+  right: var(--margin, 24px);
+  bottom: 4px;
+  font-family: var(--font-reading);
+  font-size: var(--font-size, 20px);
+  line-height: var(--line-height, 1.8);
+  color: var(--g0);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: hidden;
+}
+
+/* Touch zone hints */
+.touch-hints {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.reader-body:hover .touch-hints {
+  opacity: 1;
+}
+
+.touch-hint {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-family: var(--font-ui);
+  color: var(--g8);
+  letter-spacing: 1px;
+}
+
+.touch-hint-left { background: rgba(0,0,0,0.03); }
+.touch-hint-center { background: rgba(0,0,0,0.01); }
+.touch-hint-right { background: rgba(0,0,0,0.03); }
+
+/* Touch active zones */
+.touch-zone {
+  position: absolute;
+  top: 0; height: 100%;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.touch-zone-left { left: 0; width: 33.33%; }
+.touch-zone-center { left: 33.33%; width: 33.34%; }
+.touch-zone-right { left: 66.67%; width: 33.33%; }
+
+/* Reader Footer */
+.reader-footer {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--margin, 24px);
+  font-size: 12px;
+  color: var(--g8);
+  flex-shrink: 0;
+  border-top: 1px solid var(--gD);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════
+   E-INK REFRESH EFFECTS
+   ═══════════════════════════════════════════════ */
+
+/* GL16-style page flip (no flash, fade) */
+.eink-gl16 {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: var(--g8);
+  z-index: 80;
+  pointer-events: none;
+  opacity: 0;
+  animation: gl16Refresh 0.28s ease-out forwards;
+}
+
+@keyframes gl16Refresh {
+  0%   { opacity: 0.15; }
+  25%  { opacity: 0.08; }
+  100% { opacity: 0; }
+}
+
+/* GC16-style full refresh (flash black) */
+.eink-gc16 {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: var(--g0);
+  z-index: 80;
+  pointer-events: none;
+  animation: gc16Refresh 0.5s ease-out forwards;
+}
+
+@keyframes gc16Refresh {
+  0%   { opacity: 0.92; }
+  35%  { opacity: 0.85; }
+  55%  { opacity: 0.2; }
+  100% { opacity: 0; }
+}
+
+/* Ghost residue simulation */
+.ghost-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+/* ═══════════════════════════════════════════════
+   TOOLBAR OVERLAY
+   ═══════════════════════════════════════════════ */
+
+.toolbar-layer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: none;
+  flex-direction: column;
+  z-index: 60;
+}
+
+.toolbar-layer.visible { display: flex; }
+
+.toolbar-top {
+  height: 48px;
+  background: var(--g0);
+  color: var(--gF);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.toolbar-top .tb-back {
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.toolbar-top .tb-back:hover { background: rgba(255,255,255,0.1); }
+
+.toolbar-top .tb-back svg {
+  width: 20px; height: 20px;
+  fill: none; stroke: var(--gF);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.toolbar-top .tb-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.toolbar-mask {
+  flex: 1;
+  background: rgba(200, 200, 195, 0.4);
+  cursor: pointer;
+}
+
+.toolbar-progress {
+  height: 48px;
+  background: var(--gF);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 14px;
+  border-top: 1px solid var(--gC);
+  flex-shrink: 0;
+}
+
+.tp-track {
+  flex: 1;
+  height: 6px;
+  background: var(--gC);
+  border-radius: 3px;
+  position: relative;
+  cursor: pointer;
+}
+
+.tp-fill {
+  height: 100%;
+  background: var(--g3);
+  border-radius: 3px;
+  transition: width 0.15s;
+  position: relative;
+}
+
+.tp-handle {
+  position: absolute;
+  right: -7px; top: 50%;
+  transform: translateY(-50%);
+  width: 14px; height: 14px;
+  background: var(--g0);
+  border-radius: 50%;
+  border: 2px solid var(--gF);
+}
+
+.tp-label {
+  font-size: 13px;
+  color: var(--g3);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+
+.toolbar-actions {
+  height: 72px;
+  background: var(--gF);
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--gC);
+  flex-shrink: 0;
+}
+
+.tb-action {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: background 0.08s;
+  border-right: 1px solid var(--gC);
+}
+
+.tb-action:last-child { border-right: none; }
+.tb-action:hover { background: var(--gD); }
+.tb-action:active { background: var(--gC); }
+
+.tb-action svg {
+  width: 22px; height: 22px;
+  fill: none; stroke: var(--g3);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tb-action span {
+  font-size: 11px;
+  color: var(--g5);
+}
+
+/* ═══════════════════════════════════════════════
+   SETTINGS PANEL (slide from bottom)
+   ═══════════════════════════════════════════════ */
+
+.settings-layer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: none;
+  flex-direction: column;
+  z-index: 70;
+}
+
+.settings-layer.visible { display: flex; }
+
+.settings-mask {
+  flex: 1;
+  background: rgba(200, 200, 195, 0.35);
+  cursor: pointer;
+}
+
+.settings-panel {
+  background: var(--gF);
+  border-top: 2px solid var(--g3);
+  padding: 16px 24px 20px;
+  flex-shrink: 0;
+}
+
+.sp-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--g0);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sp-close {
+  width: 28px; height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.sp-close:hover { background: var(--gD); }
+
+.sp-close svg {
+  width: 16px; height: 16px;
+  fill: none; stroke: var(--g3);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.sp-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+  gap: 12px;
+}
+
+.sp-label {
+  font-size: 12px;
+  color: var(--g5);
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+.sp-control {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-btn {
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--gC);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--g3);
+  background: var(--gF);
+  transition: all 0.08s;
+  flex-shrink: 0;
+}
+
+.sp-btn:hover { background: var(--gD); border-color: var(--g8); }
+.sp-btn:active { background: var(--gC); }
+
+.sp-value {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--g0);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Margin selector */
+.margin-group {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+
+.margin-opt {
+  flex: 1;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--gC);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--g3);
+  background: var(--gF);
+  transition: all 0.08s;
+}
+
+.margin-opt:hover { background: var(--gD); }
+
+.margin-opt.selected {
+  background: var(--g0);
+  color: var(--gF);
+  border-color: var(--g0);
+}
+
+/* Line spacing slider */
+.sp-slider {
+  flex: 1;
+  height: 4px;
+  background: var(--gC);
+  border-radius: 2px;
+  position: relative;
+  cursor: pointer;
+}
+
+.sp-slider-fill {
+  height: 100%;
+  background: var(--g3);
+  border-radius: 2px;
+}
+
+.sp-slider-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 18px; height: 18px;
+  background: var(--g0);
+  border-radius: 50%;
+  border: 2px solid var(--gF);
+  cursor: grab;
+}
+
+.sp-slider-label {
+  font-size: 12px;
+  color: var(--g5);
+  min-width: 24px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Full refresh interval */
+.refresh-group {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+
+.refresh-opt {
+  flex: 1;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--gC);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--g3);
+  background: var(--gF);
+  transition: all 0.08s;
+}
+
+.refresh-opt:hover { background: var(--gD); }
+
+.refresh-opt.selected {
+  background: var(--g0);
+  color: var(--gF);
+  border-color: var(--g0);
+}
+
+/* ═══════════════════════════════════════════════
+   SIDE PANEL — Controls & Info
+   ═══════════════════════════════════════════════ */
+
+.side-panel {
+  width: 260px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.info-card {
+  background: #222226;
+  border-radius: 12px;
+  padding: 18px 16px;
+}
+
+.info-card h4 {
+  color: #777;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 12px;
+}
+
+.info-row .info-key { color: #888; }
+.info-row .info-val { color: #ccc; font-variant-numeric: tabular-nums; }
+
+.info-divider {
+  height: 1px;
+  background: #333;
+  margin: 8px 0;
+}
+
+.shortcut-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: #888;
+}
+
+.shortcut-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  background: #2e2e32;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #aaa;
+  font-family: var(--font-ui);
+}
+
+.file-input-wrapper {
+  margin-top: 8px;
+}
+
+.file-btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: 1.5px dashed #444;
+  border-radius: 8px;
+  color: #888;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.file-btn:hover {
+  border-color: #666;
+  color: #bbb;
+  background: #2a2a2e;
+}
+
+.file-name {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .device-container { flex-direction: column; align-items: center; }
+  .side-panel { position: static; width: 100%; max-width: 580px; flex-direction: row; flex-wrap: wrap; }
+  .info-card { flex: 1; min-width: 240px; }
+}
+</style>
+</head>
+<body>
+
+<div class="device-container">
+  <!-- ═══ Side Panel ═══ -->
+  <div class="side-panel">
+    <div class="info-card">
+      <h4>Reading Info</h4>
+      <div class="info-row">
+        <span class="info-key">Page</span>
+        <span class="info-val" id="info-page">1 / 1</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Progress</span>
+        <span class="info-val" id="info-progress">0%</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Font Size</span>
+        <span class="info-val" id="info-font-size">20px</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Line Height</span>
+        <span class="info-val" id="info-line-height">1.8</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Margin</span>
+        <span class="info-val" id="info-margin">24px</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Refresh</span>
+        <span class="info-val" id="info-refresh">GL16</span>
+      </div>
+      <div class="info-divider"></div>
+      <div class="info-row">
+        <span class="info-key">File Size</span>
+        <span class="info-val" id="info-filesize">--</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Characters</span>
+        <span class="info-val" id="info-chars">--</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Page Flips</span>
+        <span class="info-val" id="info-flips">0</span>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <h4>Controls</h4>
+      <div class="shortcut-hint">
+        <span class="shortcut-key">&larr;</span>
+        <span>Previous page</span>
+      </div>
+      <div class="shortcut-hint">
+        <span class="shortcut-key">&rarr;</span>
+        <span>Next page</span>
+      </div>
+      <div class="shortcut-hint">
+        <span class="shortcut-key">Space</span>
+        <span>Next page</span>
+      </div>
+      <div class="shortcut-hint">
+        <span class="shortcut-key">T</span>
+        <span>Toggle toolbar</span>
+      </div>
+      <div class="shortcut-hint">
+        <span class="shortcut-key">S</span>
+        <span>Toggle settings</span>
+      </div>
+      <div class="info-divider"></div>
+      <div class="file-input-wrapper">
+        <label class="file-btn" for="file-input">
+          Load a .txt file
+        </label>
+        <input type="file" id="file-input" accept=".txt" style="display:none">
+        <div class="file-name" id="file-name">Using built-in demo text</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Device Frame ═══ -->
+  <div class="device-frame">
+    <div class="device-label">Parchment &mdash; M5Paper S3</div>
+    <div class="screen" id="screen">
+
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <span class="sb-time" id="sb-time">14:30</span>
+        <div class="sb-icons">
+          <div class="sb-battery">
+            <div class="sb-battery-shell">
+              <div class="sb-battery-fill"></div>
+            </div>
+            <span class="sb-battery-text">72%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Reading Page ═══ -->
+      <div class="page-layer active" id="page-reader">
+        <!-- Header -->
+        <div class="reader-header" id="reader-header">
+          <div class="back-btn" id="btn-back">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </div>
+          <span class="title" id="header-title">Parchment</span>
+        </div>
+
+        <!-- Sub-header (chapter info) -->
+        <div class="reader-sub-header" id="sub-header"></div>
+
+        <!-- Body — text content + touch zones -->
+        <div class="reader-body" id="reader-body">
+          <div class="reader-text" id="reader-text"></div>
+
+          <!-- Touch zone hints -->
+          <div class="touch-hints">
+            <div class="touch-hint touch-hint-left">Prev</div>
+            <div class="touch-hint touch-hint-center">Menu</div>
+            <div class="touch-hint touch-hint-right">Next</div>
+          </div>
+
+          <!-- Active touch zones -->
+          <div class="touch-zone touch-zone-left" id="tz-left"></div>
+          <div class="touch-zone touch-zone-center" id="tz-center"></div>
+          <div class="touch-zone touch-zone-right" id="tz-right"></div>
+
+          <!-- Ghost residue canvas -->
+          <canvas class="ghost-overlay" id="ghost-canvas"></canvas>
+        </div>
+
+        <!-- Footer -->
+        <div class="reader-footer">
+          <span id="footer-left">Parchment</span>
+          <span id="footer-right">1 / 1&ensp;0%</span>
+        </div>
+      </div>
+
+      <!-- ═══ Toolbar Overlay ═══ -->
+      <div class="toolbar-layer" id="toolbar-layer">
+        <div class="toolbar-top">
+          <div class="tb-back" id="tb-back-btn">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </div>
+          <span class="tb-title" id="tb-title">Parchment</span>
+        </div>
+
+        <div class="toolbar-mask" id="toolbar-mask"></div>
+
+        <div class="toolbar-progress">
+          <div class="tp-track" id="tp-track">
+            <div class="tp-fill" id="tp-fill" style="width:0%">
+              <div class="tp-handle"></div>
+            </div>
+          </div>
+          <span class="tp-label" id="tp-label">0%</span>
+        </div>
+
+        <div class="toolbar-actions">
+          <div class="tb-action" id="tb-toc">
+            <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            <span>目录</span>
+          </div>
+          <div class="tb-action" id="tb-settings">
+            <svg viewBox="0 0 24 24"><text x="4" y="17" font-size="14" font-weight="600" font-family="serif" fill="#333" stroke="none">Aa</text></svg>
+            <span>设置</span>
+          </div>
+          <div class="tb-action" id="tb-bookmark">
+            <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            <span>书签</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Settings Overlay ═══ -->
+      <div class="settings-layer" id="settings-layer">
+        <div class="settings-mask" id="settings-mask"></div>
+
+        <div class="settings-panel">
+          <div class="sp-title">
+            阅读设置
+            <div class="sp-close" id="sp-close">
+              <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </div>
+          </div>
+
+          <!-- Font size -->
+          <div class="sp-row">
+            <span class="sp-label">字号</span>
+            <div class="sp-control">
+              <div class="sp-btn" id="fs-dec">A&minus;</div>
+              <span class="sp-value" id="fs-display">20px</span>
+              <div class="sp-btn" id="fs-inc">A+</div>
+            </div>
+          </div>
+
+          <!-- Line height -->
+          <div class="sp-row">
+            <span class="sp-label">行距</span>
+            <div class="sp-control">
+              <span class="sp-slider-label">1.2</span>
+              <div class="sp-slider" id="lh-slider">
+                <div class="sp-slider-fill" id="lh-fill" style="width:40%"></div>
+                <div class="sp-slider-thumb" id="lh-thumb" style="left:40%"></div>
+              </div>
+              <span class="sp-slider-label">2.4</span>
+            </div>
+          </div>
+
+          <!-- Margin -->
+          <div class="sp-row">
+            <span class="sp-label">边距</span>
+            <div class="sp-control">
+              <div class="margin-group">
+                <div class="margin-opt" data-margin="16" onclick="setMargin(16, this)">窄</div>
+                <div class="margin-opt selected" data-margin="24" onclick="setMargin(24, this)">中</div>
+                <div class="margin-opt" data-margin="36" onclick="setMargin(36, this)">宽</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Full refresh interval -->
+          <div class="sp-row">
+            <span class="sp-label">全刷</span>
+            <div class="sp-control">
+              <div class="refresh-group">
+                <div class="refresh-opt" data-interval="3" onclick="setRefreshInterval(3, this)">3页</div>
+                <div class="refresh-opt selected" data-interval="5" onclick="setRefreshInterval(5, this)">5页</div>
+                <div class="refresh-opt" data-interval="10" onclick="setRefreshInterval(10, this)">10页</div>
+                <div class="refresh-opt" data-interval="0" onclick="setRefreshInterval(0, this)">关</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// PARCHMENT READER ENGINE
+// Matches embedded TextPaginator logic for migration reference
+// ═══════════════════════════════════════════════════════════
+
+// ── State ──
+const state = {
+  text: '',
+  fileName: 'Demo',
+  pageStarts: [0],
+  currentPage: 0,
+  totalPages: 1,
+  pageFlipCount: 0,
+
+  // Settings
+  fontSize: 20,
+  lineHeight: 1.8,
+  margin: 24,
+  fullRefreshInterval: 5,
+
+  // Dimensions (matching device)
+  screenW: 540,
+  screenH: 940,  // minus status bar 20px
+  headerH: 48,
+  subHeaderH: 24,
+  footerH: 32,
+
+  // Computed
+  contentW: 0,
+  contentH: 0,
+
+  // UI state
+  toolbarVisible: false,
+  settingsVisible: false,
+};
+
+// ── Demo Text ──
+const DEMO_TEXT = `第一章  科学边界
+
+汪淼觉得天要塌了。
+
+不，不是觉得，而是眼睛真真切切地看到了——天空中出现了一个巨大的倒计时。
+
+那些数字悬浮在距地面大约一千米的高空，从他所在的位置，整个城市的天际线上方，那组冰冷的阿拉伯数字清晰可见。它们是半透明的，像是用某种无形的力量刻在空气中，随着太阳的移动而微微闪烁。
+
+"你也看到了？"汪淼转向身旁的女警官，她叫申玉菲——或者至少这是她给他的名字。
+
+申玉菲没有回答，她的目光穿过车窗，紧盯着远处一栋灰色的建筑。那是纳米材料研究中心，汪淼工作了十五年的地方。
+
+"时间不多了，"她终于说，语气中没有任何情感波动，仿佛在讨论天气。"我们需要你的帮助。"
+
+汪淼揉了揉眼睛。倒计时还在。
+
+1194:23:05:07
+
+将近五十天。五十天后会发生什么？他不知道，但他知道，自从杨冬自杀后，整个科学界就陷入了一种前所未有的恐慌。那些最顶尖的物理学家们，一个接一个地崩溃了。有人选择了死亡，有人选择了沉默。而汪淼——一个纳米材料学家——被卷入了这一切。
+
+他本以为科学是一条通往真理的康庄大道。现在他发现，这条路的尽头也许是一堵墙。
+
+第二章  射手与农场主
+
+关于宇宙的真相，有两个著名的假说。
+
+第一个叫"射手"假说：有一名神枪手，在一个靶子上每隔十厘米打一个洞。设想这个靶子上住着一种二维智能生物，它们中的科学家在对自己的宇宙进行观测后，发现了一个伟大的定律："宇宙每隔十厘米，必然会有一个洞。"它们把这个神枪手一时兴起的随意行为，看成了自己宇宙中的铁律。
+
+第二个叫"农场主假说"：一个农场里有一群火鸡，农场主每天中午十一点来给它们喂食。火鸡中的一名科学家观察这个现象，一直观察了近一年都没有例外，于是它也发现了自己宇宙中的伟大定律："每天上午十一点，就有食物降临。"它在感恩节的早晨向火鸡们公布了这个定律，但这天上午十一点食物没有降临。
+
+农场主进来的时候，手里拿的是一把刀。
+
+"你觉得哪个假说更接近真相？"常伟思将军问汪淼。他们坐在一间没有窗户的会议室里，荧光灯发出苍白的光。
+
+汪淼想了想。"在我们的尺度上，两者并没有本质区别。我们既是靶子上的二维生物，也是农场里的火鸡。"
+
+常伟思点了点头，像是对这个回答很满意。"那么，你愿意帮我们去看看——是谁在开枪？又是谁在磨刀？"
+
+这就是一切的开始。
+
+第三章  黑暗森林
+
+宇宙就是一座黑暗森林，每个文明都是带枪的猎人，像幽灵般潜行于林间，轻轻拨开挡路的树枝，竭力不让脚步发出一点儿声音，连呼吸都必须小心翼翼。
+
+他必须小心，因为林中到处都有与他一样潜行的猎人。如果他发现了别的生命，不管是不是猎人，不管是天使还是魔鬼，不管是娇嫩的婴儿还是步履蹒跚的老人，也不管是天仙般的少女还是天神般的男孩，能做的只有一件事：开枪消灭之。在这片森林中，他人就是地狱，就是永恒的威胁，任何暴露自己存在的生命都将很快被消灭。
+
+这就是宇宙文明的图景，这就是对费米悖论的解释。
+
+罗辑盯着天花板，脑中飞速运转着这一理论的全部含义。如果宇宙中每个文明都是猎人，那么人类刚刚做的事情——向宇宙广播自己的坐标——就是在黑暗森林中点燃了一堆篝火，然后在旁边高喊："我在这儿！我在这儿！"
+
+这是多么疯狂的举动。
+
+他想起了叶文洁。在红岸基地，她向太阳发出了第一个信号，那个信号穿越了数光年的距离，到达了三体世界。这一举动就此决定了两个文明的命运。
+
+而现在，作为面壁者，他被期望找到一种方法来拯救这个已经被判了死刑的文明。一个人对抗整个宇宙的沉默。
+
+在那些规则中，罗辑开始看到了一些其他人都没有注意到的东西——一个隐藏在沉默本身之中的规律。
+
+如果说暴露意味着毁灭，那么沉默本身也是一种信息。当你在森林中行走时，寂静可能意味着两件事：要么你是孤独的，要么——猎人已经瞄准了你。
+
+第四章  面壁者
+
+联合国大会堂内的灯光比平时更加昏暗，仿佛整栋建筑本身也在承受着某种不可言说的重压。来自一百九十三个国家的代表们坐在各自的席位上，但今天他们不是来讨论贸易关税或者气候变化的。
+
+今天，他们要选出四个人——四个被赋予无限权力和绝对秘密的人——来拯救全人类。
+
+"面壁计划"，这个名字来源于禅宗。达摩祖师面壁十年，不与外界交流，内心的思考是完全封闭的。这正是他们需要的：一种连智子都无法窥探的战略。
+
+因为智子无处不在。
+
+那些来自三体世界的微观粒子，以光速围绕地球运转，锁定了人类科学的前进方向，同时像一面面隐形的镜子，将地球上的一切——每一次会议，每一份文件，每一段对话——实时传送到四光年之外。
+
+在智子的监视下，任何公开的战略都等于送给敌人的情报。唯一无法被窥探的，是人类的内心。
+
+所以他们需要面壁者。
+
+四个人被选中了。
+
+泰勒，前美国国防部长，以其激进的军事思维著称。他的计划据说涉及人类舰队的彻底重组。
+
+雷迪亚兹，曾经的委内瑞拉总统，一个以铁腕手段闻名的政治家。没有人知道他在想什么——这也许正是他被选中的原因。
+
+希恩斯，英国脑科学家，诺贝尔奖得主。他的研究方向是人类思维的本质，这让他成为了面壁计划最不寻常的候选人。
+
+以及罗辑。
+
+一个社会学教授。一个没有任何军事或政治背景的普通学者。一个甚至不太了解自己为什么会被选中的人。
+
+但罗辑知道一件其他人不知道的事。叶文洁在临死前告诉了他两条宇宙社会学的公理：第一，生存是文明的第一需要；第二，文明不断增长和扩张，但宇宙中的物质总量保持不变。
+
+从这两条公理出发，加上两个关键的概念——猜疑链和技术爆炸——就可以推导出整个宇宙文明的生存图景。
+
+黑暗森林。
+
+第五章  咒语
+
+罗辑坐在雪地里，仰望着北欧冬日低垂的天空。
+
+他已经在面壁计划中浪费了三年时间。或者说，在其他人看来是浪费了——他用政府拨给他的巨额资金，在北欧的湖边建了一栋别墅，然后每天什么也不做，只是坐在壁炉前喝酒，偶尔出门看看雪。
+
+全世界都在嘲笑他。媒体称他为"最不称职的面壁者"，政客们要求罢免他，民众在网上发起了无数次请愿。
+
+但没有人知道他真正在做什么。
+
+事实上，连他自己也不完全确定。
+
+"你在想什么？"庄颜问。她站在落地窗前，手里端着一杯热巧克力。窗外的雪已经积了半米厚。
+
+"一个咒语，"罗辑说。
+
+"什么咒语？"
+
+"一个可以杀死星星的咒语。"
+
+庄颜笑了，以为他在开玩笑。但罗辑没有笑。他在想的是一个坐标——一组特定的数字，指向宇宙中某颗恒星的位置。如果他把这组坐标广播出去，会发生什么？
+
+根据黑暗森林法则，那颗恒星会被摧毁。不是立即的——光速限制了信息和打击的传播速度——但它终将被摧毁。任何在宇宙中暴露了自身坐标的文明都无法幸免。
+
+这就是他的武器。这就是他的计划。
+
+不是建造更大的飞船，不是研发更强的武器，而是——威慑。如果三体文明继续入侵地球，他就广播太阳系的坐标。两个文明同归于尽。
+
+这是一个疯子的计划。
+
+但在黑暗森林中，只有疯子才能生存。
+
+第六章  冬眠
+
+距离三体舰队到达还有四百多年。
+
+这个数字大到几乎失去了意义。对于个体的人类生命来说，四百年是遥不可及的——大约相当于从明朝末年到现在的时间跨度。没有人能活着等到那一天。
+
+除非你选择冬眠。
+
+冬眠技术在危机爆发后得到了飞速发展。当人类意识到末日虽远却确实存在时，一种奇特的社会现象出现了：人们开始逃离当下。不是逃向太空——以人类目前的技术，最快的飞船也需要数千年才能到达最近的恒星——而是逃向未来。
+
+"如果我们这一代人无法解决问题，"人们这样安慰自己，"那就让后代来解决吧。"
+
+冬眠的人越来越多。先是科学家和军人，然后是政客和商人，最后是普通人。只要你付得起费用——而这个费用在规模效应下越来越低——你就可以在液氮中沉睡，直到一个你认为更美好的时代来临。
+
+这是人类版本的逃避。
+
+罗辑也选择了冬眠。不是为了逃避，而是为了等待。他需要一个更遥远的未来来验证他的理论，或者执行他的计划。
+
+在进入冬眠舱之前，他最后看了一眼庄颜和他们的女儿。她们也将冬眠，但会在一个不同的时间点醒来。
+
+"我们还会再见面吗？"庄颜问。
+
+"会的，"罗辑说。"在未来。"
+
+然后液氮淹没了一切，世界变成了一片无梦的黑暗。`;
+
+// ═══════════════════════════════════════════════
+//  TEXT PAGINATOR — Mirrors embedded logic
+// ═══════════════════════════════════════════════
+
+function computeLayout() {
+  state.contentW = state.screenW - 2 * state.margin;
+  // screenH=940, minus header(48) + subheader(24) + footer(32) + padding(8)
+  state.contentH = state.screenH - state.headerH - state.subHeaderH - state.footerH - 8;
+}
+
+function measureCharWidth(char) {
+  // Use canvas for accurate measurement
+  const ctx = measureCtx;
+  ctx.font = `${state.fontSize}px "LXGW WenKai TC", "Noto Serif SC", Georgia, serif`;
+  return ctx.measureText(char).width;
+}
+
+// Pre-measure common widths
+let measureCanvas, measureCtx;
+let cachedCJKWidth = 0;
+let cachedSpaceWidth = 0;
+
+function buildWidthCache() {
+  if (!measureCanvas) {
+    measureCanvas = document.createElement('canvas');
+    measureCtx = measureCanvas.getContext('2d');
+  }
+  measureCtx.font = `${state.fontSize}px "LXGW WenKai TC", "Noto Serif SC", Georgia, serif`;
+  cachedCJKWidth = measureCtx.measureText('\u4E00').width;
+  cachedSpaceWidth = measureCtx.measureText(' ').width;
+}
+
+function charWidth(cp) {
+  // Fast path for CJK and ASCII
+  if (cp >= 0x4E00 && cp <= 0x9FFF) return cachedCJKWidth;
+  if (cp >= 0x3400 && cp <= 0x4DBF) return cachedCJKWidth;
+  if (cp >= 0xF900 && cp <= 0xFAFF) return cachedCJKWidth;
+  if (cp >= 0x20000 && cp <= 0x2FA1F) return cachedCJKWidth;
+  // CJK punctuation — full-width
+  if (cp >= 0x3000 && cp <= 0x303F) return cachedCJKWidth;
+  if (cp >= 0xFF00 && cp <= 0xFFEF) return cachedCJKWidth;
+  if (cp >= 0x2000 && cp <= 0x206F) return cachedSpaceWidth;
+
+  if (cp === 0x20) return cachedSpaceWidth;
+  if (cp < 0x80) {
+    return measureCtx.measureText(String.fromCodePoint(cp)).width;
+  }
+  return cachedCJKWidth;
+}
+
+/**
+ * Paginate text — mirrors TextPaginator::measurePage() logic
+ * Returns array of page start offsets
+ */
+function paginateText(text) {
+  computeLayout();
+  buildWidthCache();
+
+  const lineH = state.fontSize * state.lineHeight;
+  const linesPerPage = Math.floor(state.contentH / lineH);
+  if (linesPerPage <= 0) return [0];
+
+  const pages = [0];
+  let pos = 0;
+
+  while (pos < text.length) {
+    let lineInPage = 0;
+
+    while (pos < text.length && lineInPage < linesPerPage) {
+      const ch = text[pos];
+
+      // Handle newlines
+      if (ch === '\n') {
+        pos++;
+        lineInPage++;
+        continue;
+      }
+      if (ch === '\r') {
+        pos++;
+        if (pos < text.length && text[pos] === '\n') pos++;
+        lineInPage++;
+        continue;
+      }
+
+      // Measure one line
+      let lineWidth = 0;
+      const lineStart = pos;
+
+      while (pos < text.length && text[pos] !== '\n' && text[pos] !== '\r') {
+        const cp = text.codePointAt(pos);
+        const cw = charWidth(cp);
+
+        if (lineWidth + cw > state.contentW && pos > lineStart) {
+          break;
+        }
+
+        lineWidth += cw;
+        pos += cp > 0xFFFF ? 2 : 1;
+
+        if (lineWidth > state.contentW) break;
+      }
+
+      // Safety: ensure at least one char consumed
+      if (pos === lineStart && pos < text.length) {
+        const cp = text.codePointAt(pos);
+        pos += cp > 0xFFFF ? 2 : 1;
+      }
+
+      lineInPage++;
+    }
+
+    if (pos < text.length) {
+      pages.push(pos);
+    }
+  }
+
+  return pages;
+}
+
+// ═══════════════════════════════════════════════
+//  RENDERER
+// ═══════════════════════════════════════════════
+
+function renderPage() {
+  const start = state.pageStarts[state.currentPage] || 0;
+  const end = state.currentPage + 1 < state.pageStarts.length
+    ? state.pageStarts[state.currentPage + 1]
+    : state.text.length;
+
+  const rawText = state.text.substring(start, end);
+
+  // Build display text with line wrapping (mirrors ReaderVC::renderPage)
+  buildWidthCache();
+  const lineH = state.fontSize * state.lineHeight;
+  const linesPerPage = Math.floor(state.contentH / lineH);
+
+  let displayLines = [];
+  let pos = 0;
+
+  for (let line = 0; line < linesPerPage && pos < rawText.length; line++) {
+    if (rawText[pos] === '\n') { pos++; displayLines.push(''); continue; }
+    if (rawText[pos] === '\r') {
+      pos++;
+      if (pos < rawText.length && rawText[pos] === '\n') pos++;
+      displayLines.push('');
+      continue;
+    }
+
+    let lineWidth = 0;
+    const lineStart = pos;
+
+    while (pos < rawText.length && rawText[pos] !== '\n' && rawText[pos] !== '\r') {
+      const cp = rawText.codePointAt(pos);
+      const cw = charWidth(cp);
+
+      if (lineWidth + cw > state.contentW && pos > lineStart) break;
+
+      lineWidth += cw;
+      pos += cp > 0xFFFF ? 2 : 1;
+    }
+
+    if (pos === lineStart && pos < rawText.length) {
+      const cp = rawText.codePointAt(pos);
+      pos += cp > 0xFFFF ? 2 : 1;
+    }
+
+    displayLines.push(rawText.substring(lineStart, pos));
+  }
+
+  const textEl = document.getElementById('reader-text');
+  textEl.textContent = displayLines.join('\n');
+
+  // Update footer
+  const totalPages = state.pageStarts.length;
+  const percent = Math.min(100, Math.round(((state.currentPage + 1) / totalPages) * 100));
+  document.getElementById('footer-left').textContent = state.fileName;
+  document.getElementById('footer-right').textContent =
+    `${state.currentPage + 1} / ${totalPages}\u2003${percent}%`;
+
+  // Update sub-header
+  document.getElementById('sub-header').textContent = state.fileName;
+
+  // Update toolbar progress
+  document.getElementById('tp-fill').style.width = percent + '%';
+  document.getElementById('tp-label').textContent = percent + '%';
+
+  // Update side panel info
+  document.getElementById('info-page').textContent = `${state.currentPage + 1} / ${totalPages}`;
+  document.getElementById('info-progress').textContent = percent + '%';
+  document.getElementById('info-flips').textContent = state.pageFlipCount;
+}
+
+// ═══════════════════════════════════════════════
+//  E-INK REFRESH EFFECTS
+// ═══════════════════════════════════════════════
+
+let ghostCanvasCtx = null;
+
+function initGhostCanvas() {
+  const canvas = document.getElementById('ghost-canvas');
+  const body = document.getElementById('reader-body');
+  canvas.width = body.clientWidth;
+  canvas.height = body.clientHeight;
+  ghostCanvasCtx = canvas.getContext('2d');
+}
+
+function captureGhostImage() {
+  // Capture current text as ghost residue
+  if (!ghostCanvasCtx) return;
+  const canvas = document.getElementById('ghost-canvas');
+  const textEl = document.getElementById('reader-text');
+
+  ghostCanvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw text as faint residue
+  ghostCanvasCtx.font = `${state.fontSize}px "LXGW WenKai TC", "Noto Serif SC", Georgia, serif`;
+  ghostCanvasCtx.fillStyle = 'rgba(0, 0, 0, 0.04)';
+
+  const lines = textEl.textContent.split('\n');
+  const lineH = state.fontSize * state.lineHeight;
+  const x = 0;
+  let y = state.fontSize;
+
+  for (const line of lines) {
+    ghostCanvasCtx.fillText(line, x, y);
+    y += lineH;
+  }
+
+  canvas.style.opacity = '1';
+
+  // Fade ghost over time (cleared by full refresh)
+  setTimeout(() => {
+    canvas.style.opacity = '0.5';
+  }, 200);
+}
+
+function clearGhost() {
+  if (!ghostCanvasCtx) return;
+  const canvas = document.getElementById('ghost-canvas');
+  ghostCanvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.style.opacity = '0';
+}
+
+function doRefreshEffect(type) {
+  const screen = document.getElementById('screen');
+
+  if (type === 'gc16') {
+    // Full refresh: flash black
+    const flash = document.createElement('div');
+    flash.className = 'eink-gc16';
+    screen.appendChild(flash);
+    setTimeout(() => flash.remove(), 550);
+    clearGhost();
+    document.getElementById('info-refresh').textContent = 'GC16 (Full)';
+  } else {
+    // GL16: gentle gray flash
+    const flash = document.createElement('div');
+    flash.className = 'eink-gl16';
+    screen.appendChild(flash);
+    setTimeout(() => flash.remove(), 300);
+    captureGhostImage();
+    document.getElementById('info-refresh').textContent = 'GL16';
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  PAGE NAVIGATION
+// ═══════════════════════════════════════════════
+
+function nextPage() {
+  if (state.currentPage + 1 >= state.pageStarts.length) return;
+
+  state.currentPage++;
+  state.pageFlipCount++;
+
+  // Determine refresh mode
+  let refreshType = 'gl16';
+  if (state.fullRefreshInterval > 0 &&
+      state.pageFlipCount % state.fullRefreshInterval === 0) {
+    refreshType = 'gc16';
+  }
+
+  doRefreshEffect(refreshType);
+  renderPage();
+}
+
+function prevPage() {
+  if (state.currentPage <= 0) return;
+
+  state.currentPage--;
+  state.pageFlipCount++;
+
+  let refreshType = 'gl16';
+  if (state.fullRefreshInterval > 0 &&
+      state.pageFlipCount % state.fullRefreshInterval === 0) {
+    refreshType = 'gc16';
+  }
+
+  doRefreshEffect(refreshType);
+  renderPage();
+}
+
+// ═══════════════════════════════════════════════
+//  TOOLBAR & SETTINGS
+// ═══════════════════════════════════════════════
+
+function toggleToolbar() {
+  state.toolbarVisible = !state.toolbarVisible;
+  document.getElementById('toolbar-layer').classList.toggle('visible', state.toolbarVisible);
+  if (state.toolbarVisible) {
+    state.settingsVisible = false;
+    document.getElementById('settings-layer').classList.remove('visible');
+  }
+}
+
+function toggleSettings() {
+  state.settingsVisible = !state.settingsVisible;
+  document.getElementById('settings-layer').classList.toggle('visible', state.settingsVisible);
+  if (state.settingsVisible) {
+    state.toolbarVisible = false;
+    document.getElementById('toolbar-layer').classList.remove('visible');
+  }
+}
+
+function closeOverlays() {
+  state.toolbarVisible = false;
+  state.settingsVisible = false;
+  document.getElementById('toolbar-layer').classList.remove('visible');
+  document.getElementById('settings-layer').classList.remove('visible');
+}
+
+// ═══════════════════════════════════════════════
+//  SETTINGS CONTROLS
+// ═══════════════════════════════════════════════
+
+function adjustFontSize(delta) {
+  state.fontSize = Math.max(14, Math.min(32, state.fontSize + delta));
+  applySettings();
+}
+
+function setMargin(val, el) {
+  state.margin = val;
+  el.parentElement.querySelectorAll('.margin-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  applySettings();
+}
+
+function setRefreshInterval(val, el) {
+  state.fullRefreshInterval = val;
+  el.parentElement.querySelectorAll('.refresh-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  state.pageFlipCount = 0;
+}
+
+function applySettings() {
+  // Save current byte offset to restore position
+  const currentOffset = state.pageStarts[state.currentPage] || 0;
+
+  // Apply CSS custom properties
+  const screen = document.getElementById('screen');
+  screen.style.setProperty('--font-size', state.fontSize + 'px');
+  screen.style.setProperty('--line-height', state.lineHeight);
+  screen.style.setProperty('--margin', state.margin + 'px');
+
+  // Update display
+  document.getElementById('fs-display').textContent = state.fontSize + 'px';
+
+  // Re-paginate
+  state.pageStarts = paginateText(state.text);
+  state.totalPages = state.pageStarts.length;
+
+  // Restore position (find closest page to previous offset)
+  state.currentPage = 0;
+  for (let i = 0; i < state.pageStarts.length; i++) {
+    if (state.pageStarts[i] <= currentOffset) {
+      state.currentPage = i;
+    } else {
+      break;
+    }
+  }
+
+  // Full refresh after settings change
+  doRefreshEffect('gc16');
+  renderPage();
+
+  // Update info panel
+  document.getElementById('info-font-size').textContent = state.fontSize + 'px';
+  document.getElementById('info-line-height').textContent = state.lineHeight.toFixed(1);
+  document.getElementById('info-margin').textContent = state.margin + 'px';
+}
+
+// Line height slider
+function initLineHeightSlider() {
+  const slider = document.getElementById('lh-slider');
+  const fill = document.getElementById('lh-fill');
+  const thumb = document.getElementById('lh-thumb');
+  const minVal = 1.2, maxVal = 2.4;
+
+  function updateSlider(ratio) {
+    ratio = Math.max(0, Math.min(1, ratio));
+    state.lineHeight = minVal + ratio * (maxVal - minVal);
+    state.lineHeight = Math.round(state.lineHeight * 10) / 10;
+    const pct = ((state.lineHeight - minVal) / (maxVal - minVal)) * 100;
+    fill.style.width = pct + '%';
+    thumb.style.left = pct + '%';
+    applySettings();
+  }
+
+  function handleSliderEvent(e) {
+    const rect = slider.getBoundingClientRect();
+    const x = (e.clientX || e.touches[0].clientX) - rect.left;
+    updateSlider(x / rect.width);
+  }
+
+  let dragging = false;
+
+  slider.addEventListener('mousedown', (e) => {
+    dragging = true;
+    handleSliderEvent(e);
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (dragging) handleSliderEvent(e);
+  });
+
+  document.addEventListener('mouseup', () => { dragging = false; });
+
+  // Set initial position
+  const initRatio = (state.lineHeight - minVal) / (maxVal - minVal);
+  fill.style.width = (initRatio * 100) + '%';
+  thumb.style.left = (initRatio * 100) + '%';
+}
+
+// Progress bar scrubbing
+function initProgressScrubber() {
+  const track = document.getElementById('tp-track');
+
+  track.addEventListener('click', (e) => {
+    const rect = track.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const targetPage = Math.max(0, Math.min(state.pageStarts.length - 1,
+      Math.round(ratio * (state.pageStarts.length - 1))));
+    state.currentPage = targetPage;
+    state.pageFlipCount++;
+    doRefreshEffect('gc16');
+    renderPage();
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  FILE LOADING
+// ═══════════════════════════════════════════════
+
+function loadText(text, fileName) {
+  state.text = text;
+  state.fileName = fileName || 'Unknown';
+  state.currentPage = 0;
+  state.pageFlipCount = 0;
+
+  // Paginate
+  computeLayout();
+  state.pageStarts = paginateText(text);
+  state.totalPages = state.pageStarts.length;
+
+  // Update UI
+  document.getElementById('header-title').textContent = fileName;
+  document.getElementById('tb-title').textContent = fileName;
+
+  // Update info
+  const sizeKB = new Blob([text]).size;
+  document.getElementById('info-filesize').textContent =
+    sizeKB > 1024 ? (sizeKB / 1024).toFixed(1) + ' KB' : sizeKB + ' B';
+  document.getElementById('info-chars').textContent = text.length.toLocaleString();
+  document.getElementById('file-name').textContent = fileName;
+
+  // Initial render
+  doRefreshEffect('gc16');
+  renderPage();
+}
+
+// ═══════════════════════════════════════════════
+//  INITIALIZATION
+// ═══════════════════════════════════════════════
+
+function init() {
+  // Apply initial CSS
+  const screen = document.getElementById('screen');
+  screen.style.setProperty('--font-size', state.fontSize + 'px');
+  screen.style.setProperty('--line-height', state.lineHeight);
+  screen.style.setProperty('--margin', state.margin + 'px');
+
+  // Update clock
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('sb-time').textContent =
+      String(now.getHours()).padStart(2, '0') + ':' +
+      String(now.getMinutes()).padStart(2, '0');
+  }
+  updateClock();
+  setInterval(updateClock, 30000);
+
+  // Init components
+  initGhostCanvas();
+  initLineHeightSlider();
+  initProgressScrubber();
+
+  // Touch zones
+  document.getElementById('tz-left').addEventListener('click', prevPage);
+  document.getElementById('tz-right').addEventListener('click', nextPage);
+  document.getElementById('tz-center').addEventListener('click', toggleToolbar);
+
+  // Toolbar
+  document.getElementById('toolbar-mask').addEventListener('click', closeOverlays);
+  document.getElementById('tb-settings').addEventListener('click', () => {
+    closeOverlays();
+    setTimeout(toggleSettings, 50);
+  });
+  document.getElementById('tb-back-btn').addEventListener('click', closeOverlays);
+
+  // Settings
+  document.getElementById('settings-mask').addEventListener('click', closeOverlays);
+  document.getElementById('sp-close').addEventListener('click', closeOverlays);
+  document.getElementById('fs-dec').addEventListener('click', () => adjustFontSize(-2));
+  document.getElementById('fs-inc').addEventListener('click', () => adjustFontSize(2));
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextPage(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prevPage(); }
+    if (e.key === 't' || e.key === 'T') toggleToolbar();
+    if (e.key === 's' || e.key === 'S') toggleSettings();
+    if (e.key === 'Escape') closeOverlays();
+  });
+
+  // File input
+  document.getElementById('file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      let name = file.name;
+      if (name.endsWith('.txt')) name = name.slice(0, -4);
+      loadText(ev.target.result, name);
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+
+  // Load demo text
+  loadText(DEMO_TEXT, '三体');
+
+  // Update info panel
+  document.getElementById('info-font-size').textContent = state.fontSize + 'px';
+  document.getElementById('info-line-height').textContent = state.lineHeight.toFixed(1);
+  document.getElementById('info-margin').textContent = state.margin + 'px';
+}
+
+// Wait for fonts to load
+document.fonts.ready.then(init);
+</script>
+
+</body>
+</html>
