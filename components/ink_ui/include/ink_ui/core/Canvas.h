@@ -26,6 +26,7 @@ constexpr uint8_t Dark   = 0x30;
 constexpr uint8_t Medium = 0x80;
 constexpr uint8_t Light  = 0xC0;
 constexpr uint8_t White  = 0xF0;
+constexpr uint8_t Clear  = 0x01;  ///< 哨兵值：透明，不绘制背景
 } // namespace Color
 
 /// 带裁剪区域的绘图引擎

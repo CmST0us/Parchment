@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: HeaderView 页面标题栏
 `ink::HeaderView` SHALL 继承 `ink::View`，提供页面顶部标题栏组件。

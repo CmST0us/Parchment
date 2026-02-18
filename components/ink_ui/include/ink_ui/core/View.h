@@ -13,12 +13,11 @@
 #include <vector>
 
 #include "ink_ui/core/Geometry.h"
+#include "ink_ui/core/Canvas.h"
 #include "ink_ui/core/Event.h"
 #include "ink_ui/core/FlexLayout.h"
 
 namespace ink {
-
-class Canvas;
 
 /// EPD 刷新提示，View 携带此提示供 RenderEngine 选择刷新模式
 enum class RefreshHint {
@@ -143,7 +142,7 @@ private:
     bool subtreeNeedsDisplay_ = true;
     bool needsLayout_ = true;
 
-    uint8_t backgroundColor_ = 0xFF;  ///< 默认白色
+    uint8_t backgroundColor_ = Color::Clear;  ///< 默认透明
     bool hidden_ = false;
     bool opaque_ = true;
     RefreshHint refreshHint_ = RefreshHint::Auto;

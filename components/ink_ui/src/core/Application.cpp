@@ -52,7 +52,6 @@ void Application::buildWindowTree() {
     // contentArea_: 填满剩余空间，VC 的 root view 挂载于此
     auto ca = std::make_unique<View>();
     ca->flexGrow_ = 1;
-    ca->setBackgroundColor(Color::White);
     ca->flexStyle_.direction = FlexDirection::Column;
     ca->flexStyle_.alignItems = Align::Stretch;
     contentArea_ = ca.get();

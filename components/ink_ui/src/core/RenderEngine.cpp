@@ -92,7 +92,9 @@ void RenderEngine::drawView(View* view, bool forced) {
     if (shouldDraw) {
         Rect sf = view->screenFrame();
         Canvas canvas(fb_, sf);
-        canvas.clear(view->backgroundColor());
+        if (view->backgroundColor() != Color::Clear) {
+            canvas.clear(view->backgroundColor());
+        }
         view->onDraw(canvas);
 
         // 强制重绘所有子 View（父 View 的 clear 覆盖了子 View 区域）
@@ -244,7 +246,9 @@ void RenderEngine::repairDrawView(View* view, const Rect& damage) {
     if (!sf.intersects(damage)) return;
 
     Canvas canvas(fb_, sf);
-    canvas.clear(view->backgroundColor());
+    if (view->backgroundColor() != Color::Clear) {
+        canvas.clear(view->backgroundColor());
+    }
     view->onDraw(canvas);
 
     for (auto& child : view->subviews()) {

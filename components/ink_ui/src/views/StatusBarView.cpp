@@ -14,7 +14,6 @@
 namespace ink {
 
 StatusBarView::StatusBarView() {
-    setBackgroundColor(Color::White);
 }
 
 void StatusBarView::setFont(const EpdFont* font) {

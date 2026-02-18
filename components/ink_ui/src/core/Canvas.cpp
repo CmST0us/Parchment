@@ -382,7 +382,6 @@ void Canvas::drawChar(const EpdFont* font, uint32_t codepoint,
 
     // cursorX/cursorY 是屏幕绝对坐标
     uint8_t fg4 = color >> 4;
-    uint8_t bg4 = 0x0F;  // 白色背景
 
     for (int by = 0; by < h; by++) {
         int absY = cursorY - glyph->top + by;
@@ -403,11 +402,17 @@ void Canvas::drawChar(const EpdFont* font, uint32_t codepoint,
 
             if (alpha == 0) continue;
 
-            // 线性插值
-            uint8_t color4 = static_cast<uint8_t>(
-                bg4 + static_cast<int>(alpha) *
-                (static_cast<int>(fg4) - static_cast<int>(bg4)) / 15);
-            setPixel(absX, absY, color4 << 4);
+            if (alpha == 0x0F) {
+                // 完全不透明，直接写入前景色
+                setPixel(absX, absY, color);
+            } else {
+                // 读取实际背景像素进行 alpha 混合
+                uint8_t bg4 = getPixel(absX, absY) >> 4;
+                uint8_t color4 = static_cast<uint8_t>(
+                    bg4 + static_cast<int>(alpha) *
+                    (static_cast<int>(fg4) - static_cast<int>(bg4)) / 15);
+                setPixel(absX, absY, color4 << 4);
+            }
         }
     }
 

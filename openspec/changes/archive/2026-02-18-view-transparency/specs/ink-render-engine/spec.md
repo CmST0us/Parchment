@@ -1,11 +1,4 @@
-## ADDED Requirements
-
-### Requirement: RenderEngine 构造
-`ink::RenderEngine` SHALL 接受 `EpdDriver&` 引用构造，并从 EpdDriver 获取 framebuffer 指针。
-
-#### Scenario: 构造并绑定驱动
-- **WHEN** 创建 `RenderEngine(driver)`
-- **THEN** RenderEngine 持有 driver 引用和 framebuffer 指针，脏区域为空
+## MODIFIED Requirements
 
 ### Requirement: 5 阶段渲染循环
 `renderCycle(View* rootView)` SHALL 按以下 5 个阶段执行：
@@ -33,57 +26,6 @@
 #### Scenario: 不透明 View 清除背景
 - **WHEN** 一个 backgroundColor 为 Color::White 的 View 需要重绘
 - **THEN** RenderEngine 先调用 canvas.clear(Color::White)，再调用 onDraw()
-
-### Requirement: 多脏区域管理
-RenderEngine SHALL 维护最多 `MAX_DIRTY_REGIONS`（8）个独立脏区域，每个区域包含 Rect 和 RefreshHint。
-
-当收集到的脏区域超过 MAX_DIRTY_REGIONS 时，SHALL 将相邻区域合并以腾出空间。
-
-#### Scenario: 多个独立区域
-- **WHEN** header（y=0..48）和 list item（y=300..380）分别需要刷新
-- **THEN** 产生 2 个独立脏区域，各自独立刷新
-
-#### Scenario: 区域数量超限
-- **WHEN** 超过 8 个 View 同时变脏
-- **THEN** 相邻区域被合并，总区域数不超过 8
-
-### Requirement: 脏区域合并策略
-合并 SHALL 遵循以下规则：
-- 相邻（垂直距离 <= gap 阈值）且 RefreshHint 相同的区域 SHALL 合并
-- 不同 RefreshHint 的区域 SHALL 保持独立
-- 合并后总面积超过屏幕面积 60% 时 SHALL 退化为全屏刷新（Quality 模式）
-
-#### Scenario: 相邻同 hint 合并
-- **WHEN** 区域 A(0,300,540,80) hint=Quality 和 区域 B(0,380,540,80) hint=Quality
-- **THEN** 合并为 (0,300,540,160) hint=Quality
-
-#### Scenario: 不同 hint 不合并
-- **WHEN** 区域 A hint=Fast 和 区域 B hint=Quality
-- **THEN** A 和 B 保持独立，分别以 MODE_DU 和 MODE_GL16 刷新
-
-### Requirement: RefreshHint 到 EPD Mode 映射
-RenderEngine SHALL 按以下规则将 RefreshHint 映射到 EPD 刷新模式：
-- `Fast` → MODE_DU
-- `Quality` → MODE_GL16
-- `Full` → MODE_GC16
-- `Auto` → MODE_GL16（默认）
-
-#### Scenario: Fast hint 使用 DU
-- **WHEN** 脏区域的 RefreshHint 为 Fast
-- **THEN** 使用 MODE_DU 刷新该区域
-
-### Requirement: 残影计数与自动 GC16
-RenderEngine SHALL 维护 `partialCount_` 计数器，每次局部刷新（非 GC16）加 1。当计数达到 `GHOST_THRESHOLD`（10）时，SHALL 自动执行一次全屏 GC16 刷新并重置计数器。
-
-`forceFullClear()` SHALL 立即执行全屏 GC16 并重置计数器。
-
-#### Scenario: 累计触发 GC16
-- **WHEN** 连续执行 10 次局部刷新（MODE_DU 或 MODE_GL16）
-- **THEN** 第 10 次后自动执行全屏 GC16 清除残影，计数器归零
-
-#### Scenario: 手动清除
-- **WHEN** 调用 forceFullClear()
-- **THEN** 立即执行 GC16 全屏刷新，计数器归零
 
 ### Requirement: Subtree 重绘
 当父 View needsDisplay==true 时，Phase 3 SHALL 强制重绘其所有子 View（无论子 View 的 needsDisplay 状态），因为父 View 的 clear 操作可能覆盖子 View 区域。

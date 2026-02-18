@@ -78,8 +78,9 @@ void ButtonView::onDraw(Canvas& canvas) {
                 // 根据背景色自动选择对比前景色
                 uint8_t tint;
                 if (enabled_) {
-                    tint = (backgroundColor() < 0x80) ? Color::White
-                                                      : Color::Black;
+                    uint8_t bg = backgroundColor();
+                    tint = (bg != Color::Clear && bg < 0x80) ? Color::White
+                                                             : Color::Black;
                 } else {
                     tint = Color::Medium;
                 }
