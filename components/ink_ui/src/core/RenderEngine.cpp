@@ -2,7 +2,7 @@
  * @file RenderEngine.cpp
  * @brief 墨水屏渲染引擎实现。
  *
- * 5 阶段渲染循环：Layout → 收集脏区域 → 重绘 → 多区域刷新 → 残影管理。
+ * 4 阶段渲染循环：Layout → 收集脏区域 → 重绘 → 快速刷新。
  */
 
 #include "ink_ui/core/RenderEngine.h"
@@ -50,9 +50,6 @@ void RenderEngine::renderCycle(View* rootView) {
 
     // Phase 4: Flush
     flush();
-
-    // Phase 5: Ghost Management
-    ghostManagement();
 }
 
 // ── Phase 1: Layout Pass ──
@@ -114,42 +111,10 @@ void RenderEngine::drawView(View* view, bool forced) {
 void RenderEngine::flush() {
     mergeOverlappingRegions();
 
-    // 检查是否退化为全屏（合并面积 > 60%）
-    int totalArea = 0;
-    for (int i = 0; i < dirtyCount_; i++) {
-        totalArea += dirtyRegions_[i].rect.area();
-    }
-    int screenArea = kScreenWidth * kScreenHeight;
-
-    if (totalArea > screenArea * 60 / 100) {
-        // 退化为全屏 Quality 刷新
-        Rect fullScreen = {0, 0, kScreenWidth, kScreenHeight};
-        Rect phys = logicalToPhysical(fullScreen);
-        driver_.updateArea(phys, EpdMode::GL16);
-        partialCount_++;
-        return;
-    }
-
-    // 逐区域刷新
+    // 逐区域刷新（统一使用 GL16 模式，支持灰度且不闪黑）
     for (int i = 0; i < dirtyCount_; i++) {
         Rect phys = logicalToPhysical(dirtyRegions_[i].rect);
-        EpdMode mode = hintToMode(dirtyRegions_[i].hint);
-        driver_.updateArea(phys, mode);
-
-        if (mode != EpdMode::GC16) {
-            partialCount_++;
-        }
-    }
-}
-
-// ── Phase 5: Ghost Management ──
-
-void RenderEngine::ghostManagement() {
-    if (partialCount_ >= GHOST_THRESHOLD) {
-        ESP_LOGI(TAG, "Ghost threshold reached (%d), executing GC16 full clear",
-                 partialCount_);
-        driver_.fullClear();
-        partialCount_ = 0;
+        driver_.updateArea(phys, EpdMode::GL16);
     }
 }
 
@@ -205,26 +170,10 @@ void RenderEngine::mergeOverlappingRegions() {
     }
 }
 
-EpdMode RenderEngine::hintToMode(RefreshHint hint) {
-    switch (hint) {
-        case RefreshHint::Fast:    return EpdMode::DU;
-        case RefreshHint::Quality: return EpdMode::GL16;
-        case RefreshHint::Full:    return EpdMode::GC16;
-        case RefreshHint::Auto:    return EpdMode::GL16;
-        default:                   return EpdMode::GL16;
-    }
-}
-
 Rect RenderEngine::logicalToPhysical(const Rect& lr) {
     // 逻辑坐标 (540x960 portrait) → 物理坐标 (960x540 landscape)
     // physical_x = logical_y, physical_y = 540 - logical_x - logical_w
     return {lr.y, kScreenWidth - lr.x - lr.w, lr.h, lr.w};
-}
-
-void RenderEngine::forceFullClear() {
-    ESP_LOGI(TAG, "Force full clear (GC16)");
-    driver_.fullClear();
-    partialCount_ = 0;
 }
 
 void RenderEngine::repairDamage(View* rootView, const Rect& damage) {
@@ -234,9 +183,6 @@ void RenderEngine::repairDamage(View* rootView, const Rect& damage) {
 
     Rect phys = logicalToPhysical(damage);
     driver_.updateArea(phys, EpdMode::GL16);
-    partialCount_++;
-
-    ghostManagement();
 }
 
 void RenderEngine::repairDrawView(View* view, const Rect& damage) {

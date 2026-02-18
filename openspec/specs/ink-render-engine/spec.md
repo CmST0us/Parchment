@@ -7,20 +7,19 @@
 - **WHEN** 创建 `RenderEngine(driver)`
 - **THEN** RenderEngine 持有 driver 引用和 framebuffer 指针，脏区域为空
 
-### Requirement: 5 阶段渲染循环
-`renderCycle(View* rootView)` SHALL 按以下 5 个阶段执行：
+### Requirement: 4 阶段渲染循环
+`renderCycle(View* rootView)` SHALL 按以下 4 个阶段执行：
 
 1. **Layout Pass**：若 rootView needsLayout，递归执行 onLayout()
 2. **Collect Dirty**：遍历 View 树，收集 needsDisplay==true 的 View 的 screenFrame 和 refreshHint 为脏区域
 3. **Draw Dirty**：对每个脏 View，创建 Canvas(fb, screenFrame)。若 `backgroundColor != Color::Clear`，先 clear(backgroundColor)；否则跳过 clear（透明背景）。然后调用 onDraw(canvas)，再强制重绘其所有子 View
-4. **Flush**：合并重叠脏区域，对每个区域调用 EpdDriver::updateArea() 刷新
-5. **Ghost Management**：累计局部刷新计数，超过阈值时自动执行 GC16 全屏清除
+4. **Flush**：合并重叠脏区域，对每个区域以 MODE_GL16 刷新
 
-无脏区域时 SHALL 跳过 Phase 3-5。
+无脏区域时 SHALL 跳过 Phase 3-4。
 
 #### Scenario: 有脏 View 时完整渲染
 - **WHEN** View 树中某个 View 调用了 setNeedsDisplay()
-- **THEN** renderCycle 执行全部 5 阶段，该 View 被重绘，对应屏幕区域被刷新
+- **THEN** renderCycle 执行全部 4 阶段，该 View 被重绘，对应屏幕区域被快速刷新
 
 #### Scenario: 无脏 View 时跳过渲染
 - **WHEN** View 树无脏标记
@@ -51,39 +50,21 @@ RenderEngine SHALL 维护最多 `MAX_DIRTY_REGIONS`（8）个独立脏区域，�
 合并 SHALL 遵循以下规则：
 - 相邻（垂直距离 <= gap 阈值）且 RefreshHint 相同的区域 SHALL 合并
 - 不同 RefreshHint 的区域 SHALL 保持独立
-- 合并后总面积超过屏幕面积 60% 时 SHALL 退化为全屏刷新（Quality 模式）
 
 #### Scenario: 相邻同 hint 合并
-- **WHEN** 区域 A(0,300,540,80) hint=Quality 和 区域 B(0,380,540,80) hint=Quality
-- **THEN** 合并为 (0,300,540,160) hint=Quality
+- **WHEN** 区域 A(0,300,540,80) hint=Fast 和 区域 B(0,380,540,80) hint=Fast
+- **THEN** 合并为 (0,300,540,160) hint=Fast
 
 #### Scenario: 不同 hint 不合并
 - **WHEN** 区域 A hint=Fast 和 区域 B hint=Quality
-- **THEN** A 和 B 保持独立，分别以 MODE_DU 和 MODE_GL16 刷新
+- **THEN** A 和 B 保持独立，但均以 MODE_GL16 刷新
 
-### Requirement: RefreshHint 到 EPD Mode 映射
-RenderEngine SHALL 按以下规则将 RefreshHint 映射到 EPD 刷新模式：
-- `Fast` → MODE_DU
-- `Quality` → MODE_GL16
-- `Full` → MODE_GC16
-- `Auto` → MODE_GL16（默认）
+### Requirement: 统一快速刷新
+RenderEngine SHALL 对所有脏区域统一使用 MODE_GL16 刷新，忽略 RefreshHint 的具体值。不执行自动残影管理或 GC16 刷新。
 
-#### Scenario: Fast hint 使用 DU
-- **WHEN** 脏区域的 RefreshHint 为 Fast
-- **THEN** 使用 MODE_DU 刷新该区域
-
-### Requirement: 残影计数与自动 GC16
-RenderEngine SHALL 维护 `partialCount_` 计数器，每次局部刷新（非 GC16）加 1。当计数达到 `GHOST_THRESHOLD`（10）时，SHALL 自动执行一次全屏 GC16 刷新并重置计数器。
-
-`forceFullClear()` SHALL 立即执行全屏 GC16 并重置计数器。
-
-#### Scenario: 累计触发 GC16
-- **WHEN** 连续执行 10 次局部刷新（MODE_DU 或 MODE_GL16）
-- **THEN** 第 10 次后自动执行全屏 GC16 清除残影，计数器归零
-
-#### Scenario: 手动清除
-- **WHEN** 调用 forceFullClear()
-- **THEN** 立即执行 GC16 全屏刷新，计数器归零
+#### Scenario: 所有区域使用 DU 模式
+- **WHEN** 脏区域的 RefreshHint 为 Fast、Quality 或 Full
+- **THEN** 均使用 MODE_GL16 刷新该区域
 
 ### Requirement: Subtree 重绘
 当父 View needsDisplay==true 时，Phase 3 SHALL 强制重绘其所有子 View（无论子 View 的 needsDisplay 状态），因为父 View 的 clear 操作可能覆盖子 View 区域。
@@ -105,13 +86,13 @@ RenderEngine SHALL 维护 `partialCount_` 计数器，每次局部刷新（非 G
 - **THEN** 父 View 区域被清为白色，TextLabel 的文字直接绘制在白色背景上，无可见矩形边界
 
 ### Requirement: repairDamage 损伤修复
-`repairDamage(View* rootView, const Rect& damage)` SHALL 对指定矩形区域执行裁剪重绘：找到与 damage 区域重叠的所有 View，在 damage 范围内重绘它们，然后刷新该区域到 EPD。
+`repairDamage(View* rootView, const Rect& damage)` SHALL 对指定矩形区域执行裁剪重绘：找到与 damage 区域重叠的所有 View，在 damage 范围内重绘它们，然后以 MODE_GL16 刷新该区域。
 
 重绘过程中 SHALL 遵循与 drawView 相同的透明背景逻辑：backgroundColor 为 Color::Clear 的 View 跳过 clear。
 
 #### Scenario: 浮层关闭后修复
 - **WHEN** 浮层消失，调用 repairDamage(root, floatRect)
-- **THEN** floatRect 区域内的底层 View 被重绘，EPD 刷新该区域
+- **THEN** floatRect 区域内的底层 View 被重绘，EPD 以 GL16 模式刷新该区域
 
 #### Scenario: 修复区域中的透明 View
 - **WHEN** damage 区域内包含透明 TextLabel
