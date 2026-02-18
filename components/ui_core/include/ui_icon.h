@@ -24,6 +24,7 @@ typedef struct {
 
 /** 预定义图标常量 (32×32)。 */
 extern const ui_icon_t UI_ICON_ARROW_LEFT;     /**< ← 返回箭头。 */
+extern const ui_icon_t UI_ICON_ARROW_RIGHT;    /**< → 前进箭头。 */
 extern const ui_icon_t UI_ICON_MENU;           /**< ≡ 菜单。 */
 extern const ui_icon_t UI_ICON_SETTINGS;       /**< 齿轮设置。 */
 extern const ui_icon_t UI_ICON_BOOKMARK;       /**< 书签。 */

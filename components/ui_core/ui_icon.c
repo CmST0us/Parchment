@@ -18,6 +18,12 @@ const ui_icon_t UI_ICON_ARROW_LEFT = {
     .h = ICON_SIZE,
 };
 
+const ui_icon_t UI_ICON_ARROW_RIGHT = {
+    .data = icon_arrow_right_data,
+    .w = ICON_SIZE,
+    .h = ICON_SIZE,
+};
+
 const ui_icon_t UI_ICON_MENU = {
     .data = icon_menu_2_data,
     .w = ICON_SIZE,

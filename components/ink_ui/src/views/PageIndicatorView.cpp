@@ -5,6 +5,7 @@
 
 #include "ink_ui/views/PageIndicatorView.h"
 #include "ink_ui/core/FlexLayout.h"
+#include "ui_icon.h"
 
 #include <cstdio>
 
@@ -19,8 +20,8 @@ PageIndicatorView::PageIndicatorView() {
 
     // 上一页按钮
     auto prev = std::make_unique<ButtonView>();
-    prev->setStyle(ButtonStyle::Secondary);
-    prev->setLabel("上一页");
+    prev->setStyle(ButtonStyle::Icon);
+    prev->setIcon(UI_ICON_ARROW_LEFT.data);
     prev->flexBasis_ = kButtonSize;
     prev->setOnTap([this]() {
         if (currentPage_ > 0) {
@@ -42,8 +43,8 @@ PageIndicatorView::PageIndicatorView() {
 
     // 下一页按钮
     auto next = std::make_unique<ButtonView>();
-    next->setStyle(ButtonStyle::Secondary);
-    next->setLabel("下一页");
+    next->setStyle(ButtonStyle::Icon);
+    next->setIcon(UI_ICON_ARROW_RIGHT.data);
     next->flexBasis_ = kButtonSize;
     next->setOnTap([this]() {
         if (currentPage_ < totalPages_ - 1) {
