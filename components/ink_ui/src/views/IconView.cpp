@@ -9,6 +9,7 @@
 namespace ink {
 
 IconView::IconView() {
+    setBackgroundColor(Color::Transparent);
     setRefreshHint(RefreshHint::Fast);
 }
 

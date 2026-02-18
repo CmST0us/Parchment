@@ -339,9 +339,8 @@ static void draw_char_logical(uint8_t *fb, const EpdFont *font,
         }
     }
 
-    /* 前景/背景色 LUT：alpha 0-15 映射到灰度值。 */
-    uint8_t fg4 = fg >> 4;       /* 0-15 */
-    uint8_t bg4 = 0x0F;          /* 白色背景 */
+    /* 前景色 0-15 */
+    uint8_t fg4 = fg >> 4;
 
     for (int by = 0; by < h; by++) {
         int ly = cursor_y - glyph->top + by;
@@ -362,9 +361,15 @@ static void draw_char_logical(uint8_t *fb, const EpdFont *font,
 
             if (alpha == 0) continue;
 
-            /* 线性插值: color = bg + alpha * (fg - bg) / 15 */
-            uint8_t color4 = (uint8_t)(bg4 + (int)(alpha * ((int)fg4 - (int)bg4)) / 15);
-            fb_set_pixel(fb, lx, ly, color4 << 4);
+            if (alpha == 0x0F) {
+                /* 完全不透明，直接写入前景色 */
+                fb_set_pixel(fb, lx, ly, fg);
+            } else {
+                /* 从 framebuffer 读取实际背景色进行混合 */
+                uint8_t bg4 = fb_get_pixel(fb, lx, ly) >> 4;
+                uint8_t color4 = (uint8_t)(bg4 + (int)(alpha * ((int)fg4 - (int)bg4)) / 15);
+                fb_set_pixel(fb, lx, ly, color4 << 4);
+            }
         }
     }
 

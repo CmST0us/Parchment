@@ -12,6 +12,7 @@
 namespace ink {
 
 TextLabel::TextLabel() {
+    setBackgroundColor(Color::Transparent);
     setRefreshHint(RefreshHint::Quality);
 }
 

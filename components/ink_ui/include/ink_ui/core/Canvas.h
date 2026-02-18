@@ -26,6 +26,10 @@ constexpr uint8_t Dark   = 0x30;
 constexpr uint8_t Medium = 0x80;
 constexpr uint8_t Light  = 0xC0;
 constexpr uint8_t White  = 0xF0;
+
+/// 透明背景哨兵值。4bpp 灰度有效值的低 4 位始终为 0，
+/// 因此 0x01 不会与任何正常灰度冲突。
+constexpr uint8_t Transparent = 0x01;
 } // namespace Color
 
 /// 带裁剪区域的绘图引擎
