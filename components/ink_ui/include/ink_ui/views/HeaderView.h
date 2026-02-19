@@ -13,6 +13,10 @@
 #include "ink_ui/views/ButtonView.h"
 #include "ink_ui/views/TextLabel.h"
 
+extern "C" {
+struct font_engine_t;
+}
+
 namespace ink {
 
 /// HeaderView: 黑底白字标题栏（leftIcon + title + rightIcon）
@@ -30,8 +34,8 @@ public:
     /// 设置右侧图标按钮
     void setRightIcon(const uint8_t* iconData, std::function<void()> onTap);
 
-    /// 设置标题字体
-    void setFont(const EpdFont* font);
+    /// 设置标题字体引擎和字号
+    void setFont(font_engine_t* engine, uint8_t fontSize);
 
     // ── View 覆写 ──
 
@@ -51,7 +55,8 @@ private:
     std::function<void()> leftTap_;
     const uint8_t* rightIconData_ = nullptr;
     std::function<void()> rightTap_;
-    const EpdFont* font_ = nullptr;
+    font_engine_t* engine_ = nullptr;
+    uint8_t fontSize_ = 0;
 
     void rebuild();
 };

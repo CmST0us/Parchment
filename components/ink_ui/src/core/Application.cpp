@@ -1,17 +1,20 @@
 /**
  * @file Application.cpp
- * @brief InkUI 应用主循环实现。
+ * @brief InkUI 应用主循环实现 (M5GFX 后端)。
  */
 
 #include "ink_ui/core/Application.h"
 #include "ink_ui/core/Canvas.h"
 #include "ink_ui/views/StatusBarView.h"
 
+#include <M5Unified.h>
+
 extern "C" {
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "font_engine/font_engine.h"
 }
 
 #include <ctime>
@@ -38,12 +41,12 @@ static void delayedTimerCallback(void* arg) {
 void Application::buildWindowTree() {
     // windowRoot_: 全屏 Column 容器
     windowRoot_ = std::make_unique<View>();
-    windowRoot_->setFrame({0, 0, kScreenWidth, kScreenHeight});
+    windowRoot_->setFrame({0, 0, M5.Display.width(), M5.Display.height()});
     windowRoot_->setBackgroundColor(Color::White);
     windowRoot_->flexStyle_.direction = FlexDirection::Column;
     windowRoot_->flexStyle_.alignItems = Align::Stretch;
 
-    // statusBar_: 20px 高，由 Application 管理（字体由 main.cpp 设置）
+    // statusBar_: 20px 高，由 Application 管理
     auto sb = std::make_unique<StatusBarView>();
     sb->flexBasis_ = 20;
     statusBar_ = sb.get();
@@ -65,7 +68,7 @@ void Application::buildWindowTree() {
 void Application::mountViewController(ViewController* vc) {
     if (!contentArea_) return;
 
-    // 1. 归还旧 VC 的 View 所有权（旧 VC 此时仍然存活）
+    // 1. 归还旧 VC 的 View 所有权
     if (mountedVC_ && !contentArea_->subviews().empty()) {
         View* oldView = contentArea_->subviews().front().get();
         auto owned = oldView->removeFromParent();
@@ -110,35 +113,48 @@ void Application::mountViewController(ViewController* vc) {
 bool Application::init() {
     ESP_LOGI(TAG, "Initializing InkUI Application...");
 
-    // 1. EpdDriver 初始化
-    auto& epd = EpdDriver::instance();
-    if (!epd.init()) {
-        ESP_LOGE(TAG, "EpdDriver init failed");
-        return false;
+    // 1. M5Unified 初始化 (显示 + 触摸 + 电源)
+    auto cfg = M5.config();
+    cfg.clear_display = true;
+    M5.begin(cfg);
+    M5.Display.setAutoDisplay(false);
+    M5.Display.setEpdMode(epd_mode_t::epd_quality);
+    ESP_LOGI(TAG, "M5.begin() done, display=%dx%d",
+             M5.Display.width(), M5.Display.height());
+
+    // 2. 字体引擎初始化
+    static font_engine_t engine;
+    if (font_engine_load(&engine, "/littlefs/reading_font.bin")) {
+        font_cache_init_common(&engine);
+        font_cache_init_recycle_pool(&engine);
+        fontEngine_ = &engine;
+        ESP_LOGI(TAG, "Font engine loaded: %s", engine.header.family_name);
+    } else {
+        ESP_LOGW(TAG, "Font engine load failed, text rendering unavailable");
     }
 
-    // 2. 创建事件队列
+    // 3. 创建事件队列
     eventQueue_ = xQueueCreate(kEventQueueSize, sizeof(Event));
     if (!eventQueue_) {
         ESP_LOGE(TAG, "Failed to create event queue");
         return false;
     }
 
-    // 3. 创建 RenderEngine
-    renderEngine_ = std::make_unique<RenderEngine>(epd);
+    // 4. 创建 RenderEngine (绑定 &M5.Display)
+    renderEngine_ = std::make_unique<RenderEngine>(&M5.Display);
 
-    // 4. 创建 GestureRecognizer
+    // 5. 创建 GestureRecognizer
     gesture_ = std::make_unique<GestureRecognizer>(eventQueue_);
 
-    // 5. 启动触摸任务
+    // 6. 启动触摸任务
     if (!gesture_->start()) {
         ESP_LOGW(TAG, "GestureRecognizer start failed, touch unavailable");
     }
 
-    // 6. 构建 Window View 树
+    // 7. 构建 Window View 树
     buildWindowTree();
 
-    // 7. 设置 NavigationController VC 切换回调
+    // 8. 设置 NavigationController VC 切换回调
     navigator_.setOnViewControllerChange(
         [this](ViewController* vc) { mountViewController(vc); });
 
@@ -189,7 +205,6 @@ void Application::dispatchEvent(const Event& event) {
             if (te.type == TouchType::Tap || te.type == TouchType::LongPress) {
                 dispatchTouch(te);
             }
-            // Down/Move/Up 原始事件也通过 hitTest 分发
             if (te.type == TouchType::Down || te.type == TouchType::Move ||
                 te.type == TouchType::Up) {
                 dispatchTouch(te);
@@ -197,7 +212,6 @@ void Application::dispatchEvent(const Event& event) {
             break;
         }
         case EventType::Swipe: {
-            // Swipe 直接传给当前 VC
             auto* vc = navigator_.current();
             if (vc) {
                 vc->handleEvent(event);
@@ -218,15 +232,13 @@ void Application::dispatchEvent(const Event& event) {
 void Application::dispatchTouch(const TouchEvent& touch) {
     if (!windowRoot_) return;
 
-    // hitTest 从 windowRoot_ 开始
     View* target = windowRoot_->hitTest(touch.x, touch.y);
     if (!target) return;
 
-    // 沿 parent 链冒泡直到被消费
     View* v = target;
     while (v) {
         if (v->onTouchEvent(touch)) {
-            break;  // 事件已消费
+            break;
         }
         v = v->parent();
     }

@@ -1,18 +1,19 @@
 /**
  * @file RenderEngine.cpp
- * @brief 墨水屏渲染引擎实现。
+ * @brief 墨水屏渲染引擎实现 (M5GFX 后端)。
  *
- * 4 阶段渲染循环：Layout → 收集脏区域 → 重绘 → 快速刷新。
+ * 4 阶段渲染循环：Layout → 收集脏区域 → 重绘 → M5GFX display() 刷新。
+ * 逻辑坐标直接使用，M5GFX 内部自动处理坐标变换。
  */
 
 #include "ink_ui/core/RenderEngine.h"
 #include "ink_ui/core/Canvas.h"
 
+#include <M5GFX.h>
+
 extern "C" {
 #include "esp_log.h"
 }
-
-static const char* TAG = "ink::RenderEngine";
 
 namespace ink {
 
@@ -24,9 +25,8 @@ static void clearDirtyFlagsRecursive(View* view) {
     }
 }
 
-RenderEngine::RenderEngine(EpdDriver& driver)
-    : driver_(driver)
-    , fb_(driver.framebuffer()) {
+RenderEngine::RenderEngine(M5GFX* display)
+    : display_(display) {
 }
 
 // ── 主渲染循环 ──
@@ -42,7 +42,7 @@ void RenderEngine::renderCycle(View* rootView) {
     collectDirty(rootView);
 
     if (dirtyCount_ == 0) {
-        return;  // 无脏区域，跳过 Phase 3-5
+        return;  // 无脏区域，跳过 Phase 3-4
     }
 
     // Phase 3: Draw Dirty
@@ -77,8 +77,14 @@ void RenderEngine::collectDirty(View* view) {
 // ── Phase 3: Draw Dirty ──
 
 void RenderEngine::drawDirty(View* rootView) {
+    if (display_) {
+        display_->startWrite();
+    }
     drawView(rootView, false);
     clearDirtyFlagsRecursive(rootView);
+    if (display_) {
+        display_->endWrite();
+    }
 }
 
 void RenderEngine::drawView(View* view, bool forced) {
@@ -88,7 +94,7 @@ void RenderEngine::drawView(View* view, bool forced) {
 
     if (shouldDraw) {
         Rect sf = view->screenFrame();
-        Canvas canvas(fb_, sf);
+        Canvas canvas(display_, sf);
         if (view->backgroundColor() != Color::Clear) {
             canvas.clear(view->backgroundColor());
         } else if (!forced) {
@@ -121,10 +127,12 @@ void RenderEngine::drawView(View* view, bool forced) {
 void RenderEngine::flush() {
     mergeOverlappingRegions();
 
-    // 逐区域刷新（统一使用 GL16 模式，支持灰度且不闪黑）
+    // 逐区域刷新 — 直接使用逻辑坐标，M5GFX 内部处理坐标变换
     for (int i = 0; i < dirtyCount_; i++) {
-        Rect phys = logicalToPhysical(dirtyRegions_[i].rect);
-        driver_.updateArea(phys, EpdMode::GL16);
+        const Rect& r = dirtyRegions_[i].rect;
+        if (display_) {
+            display_->display(r.x, r.y, r.w, r.h);
+        }
     }
 }
 
@@ -180,19 +188,17 @@ void RenderEngine::mergeOverlappingRegions() {
     }
 }
 
-Rect RenderEngine::logicalToPhysical(const Rect& lr) {
-    // 逻辑坐标 (540x960 portrait) → 物理坐标 (960x540 landscape)
-    // physical_x = logical_y, physical_y = 540 - logical_x - logical_w
-    return {lr.y, kScreenWidth - lr.x - lr.w, lr.h, lr.w};
-}
-
 void RenderEngine::repairDamage(View* rootView, const Rect& damage) {
     if (!rootView || damage.isEmpty()) return;
 
+    if (display_) {
+        display_->startWrite();
+    }
     repairDrawView(rootView, damage);
-
-    Rect phys = logicalToPhysical(damage);
-    driver_.updateArea(phys, EpdMode::GL16);
+    if (display_) {
+        display_->endWrite();
+        display_->display(damage.x, damage.y, damage.w, damage.h);
+    }
 }
 
 void RenderEngine::repairDrawView(View* view, const Rect& damage) {
@@ -201,7 +207,7 @@ void RenderEngine::repairDrawView(View* view, const Rect& damage) {
     Rect sf = view->screenFrame();
     if (!sf.intersects(damage)) return;
 
-    Canvas canvas(fb_, sf);
+    Canvas canvas(display_, sf);
     if (view->backgroundColor() != Color::Clear) {
         canvas.clear(view->backgroundColor());
     }

@@ -1,9 +1,9 @@
 /**
  * @file Canvas.cpp
- * @brief Canvas 裁剪绘图引擎实现。
+ * @brief Canvas 裁剪绘图引擎实现 (M5GFX 后端)。
  *
- * 从旧 ui_canvas.c 迁移核心像素操作、坐标变换、UTF-8 解码和 glyph 渲染逻辑，
- * 增加裁剪区域管理和局部坐标系支持。
+ * 所有绘图通过 M5GFX API 执行，坐标变换由 M5GFX 内部处理。
+ * 文字渲染通过 font_engine 获取 glyph bitmap 后用 pushImage 输出。
  */
 
 #include "ink_ui/core/Canvas.h"
@@ -11,9 +11,10 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <M5GFX.h>
+
 extern "C" {
-#include "epdiy.h"
-#include <miniz.h>
+#include "font_engine/font_engine.h"
 }
 
 namespace ink {
@@ -22,8 +23,18 @@ namespace ink {
 //  构造与裁剪
 // ============================================================================
 
-Canvas::Canvas(uint8_t* fb, Rect clip)
-    : fb_(fb), clip_(clip) {}
+Canvas::Canvas(M5GFX* display, Rect clip)
+    : display_(display), clip_(clip) {
+    if (display_) {
+        display_->setClipRect(clip_.x, clip_.y, clip_.w, clip_.h);
+    }
+}
+
+Canvas::~Canvas() {
+    if (display_) {
+        display_->clearClipRect();
+    }
+}
 
 Canvas Canvas::clipped(const Rect& subRect) const {
     // subRect 是局部坐标，转为屏幕绝对坐标
@@ -31,46 +42,7 @@ Canvas Canvas::clipped(const Rect& subRect) const {
                     subRect.w, subRect.h};
     // 取交集
     Rect newClip = clip_.intersection(absRect);
-    return Canvas(fb_, newClip);
-}
-
-// ============================================================================
-//  像素操作 (private)
-// ============================================================================
-
-void Canvas::setPixel(int absX, int absY, uint8_t gray) {
-    // 裁剪检查
-    if (absX < clip_.x || absX >= clip_.right() ||
-        absY < clip_.y || absY >= clip_.bottom()) {
-        return;
-    }
-    // 屏幕边界检查
-    if (absX < 0 || absX >= 540 || absY < 0 || absY >= 960) {
-        return;
-    }
-    // 逻辑坐标 → 物理坐标: px = ly, py = 539 - lx
-    int px = absY;
-    int py = (kFbPhysHeight - 1) - absX;
-    uint8_t* buf_ptr = &fb_[py * (kFbPhysWidth / 2) + px / 2];
-    if (px & 1) {
-        *buf_ptr = (*buf_ptr & 0x0F) | (gray & 0xF0);
-    } else {
-        *buf_ptr = (*buf_ptr & 0xF0) | (gray >> 4);
-    }
-}
-
-uint8_t Canvas::getPixel(int absX, int absY) const {
-    if (absX < 0 || absX >= 540 || absY < 0 || absY >= 960) {
-        return 0xFF;
-    }
-    int px = absY;
-    int py = (kFbPhysHeight - 1) - absX;
-    uint8_t byte_val = fb_[py * (kFbPhysWidth / 2) + px / 2];
-    if (px & 1) {
-        return byte_val & 0xF0;
-    } else {
-        return (byte_val & 0x0F) << 4;
-    }
+    return Canvas(display_, newClip);
 }
 
 // ============================================================================
@@ -78,14 +50,8 @@ uint8_t Canvas::getPixel(int absX, int absY) const {
 // ============================================================================
 
 void Canvas::clear(uint8_t gray) {
-    if (clip_.isEmpty() || !fb_) {
-        return;
-    }
-    for (int ay = clip_.y; ay < clip_.bottom(); ay++) {
-        for (int ax = clip_.x; ax < clip_.right(); ax++) {
-            setPixel(ax, ay, gray);
-        }
-    }
+    if (clip_.isEmpty() || !display_) return;
+    display_->fillRect(clip_.x, clip_.y, clip_.w, clip_.h, gray);
 }
 
 // ============================================================================
@@ -93,51 +59,15 @@ void Canvas::clear(uint8_t gray) {
 // ============================================================================
 
 void Canvas::fillRect(const Rect& rect, uint8_t gray) {
-    if (clip_.isEmpty() || !fb_) {
-        return;
-    }
-
+    if (clip_.isEmpty() || !display_) return;
     // 局部坐标 → 屏幕绝对坐标
-    int ax0 = clip_.x + rect.x;
-    int ay0 = clip_.y + rect.y;
-    int ax1 = ax0 + rect.w;
-    int ay1 = ay0 + rect.h;
-
-    // 与 clip 取交集
-    if (ax0 < clip_.x) ax0 = clip_.x;
-    if (ay0 < clip_.y) ay0 = clip_.y;
-    if (ax1 > clip_.right()) ax1 = clip_.right();
-    if (ay1 > clip_.bottom()) ay1 = clip_.bottom();
-
-    // 屏幕边界裁剪
-    if (ax0 < 0) ax0 = 0;
-    if (ay0 < 0) ay0 = 0;
-    if (ax1 > 540) ax1 = 540;
-    if (ay1 > 960) ay1 = 960;
-
-    if (ax0 >= ax1 || ay0 >= ay1) {
-        return;
-    }
-
-    for (int ay = ay0; ay < ay1; ay++) {
-        for (int ax = ax0; ax < ax1; ax++) {
-            // 直接写入，跳过 setPixel 的冗余检查
-            int px = ay;
-            int py = (kFbPhysHeight - 1) - ax;
-            uint8_t* buf_ptr = &fb_[py * (kFbPhysWidth / 2) + px / 2];
-            if (px & 1) {
-                *buf_ptr = (*buf_ptr & 0x0F) | (gray & 0xF0);
-            } else {
-                *buf_ptr = (*buf_ptr & 0xF0) | (gray >> 4);
-            }
-        }
-    }
+    int ax = clip_.x + rect.x;
+    int ay = clip_.y + rect.y;
+    display_->fillRect(ax, ay, rect.w, rect.h, gray);
 }
 
 void Canvas::drawRect(const Rect& rect, uint8_t gray, int thickness) {
-    if (rect.w <= 0 || rect.h <= 0 || thickness <= 0) {
-        return;
-    }
+    if (rect.w <= 0 || rect.h <= 0 || thickness <= 0) return;
     // 上边
     fillRect({rect.x, rect.y, rect.w, thickness}, gray);
     // 下边
@@ -149,45 +79,19 @@ void Canvas::drawRect(const Rect& rect, uint8_t gray, int thickness) {
 }
 
 void Canvas::drawHLine(int x, int y, int width, uint8_t gray) {
-    fillRect({x, y, width, 1}, gray);
+    if (clip_.isEmpty() || !display_) return;
+    display_->drawFastHLine(clip_.x + x, clip_.y + y, width, gray);
 }
 
 void Canvas::drawVLine(int x, int y, int height, uint8_t gray) {
-    fillRect({x, y, 1, height}, gray);
+    if (clip_.isEmpty() || !display_) return;
+    display_->drawFastVLine(clip_.x + x, clip_.y + y, height, gray);
 }
 
 void Canvas::drawLine(Point from, Point to, uint8_t gray) {
-    if (clip_.isEmpty() || !fb_) {
-        return;
-    }
-
-    int x0 = from.x;
-    int y0 = from.y;
-    int x1 = to.x;
-    int y1 = to.y;
-
-    int dx = x1 > x0 ? x1 - x0 : x0 - x1;
-    int dy = y1 > y0 ? y1 - y0 : y0 - y1;
-    int sx = x0 < x1 ? 1 : -1;
-    int sy = y0 < y1 ? 1 : -1;
-    int err = dx - dy;
-
-    while (true) {
-        // setPixel 会处理局部→绝对转换和裁剪
-        setPixel(clip_.x + x0, clip_.y + y0, gray);
-        if (x0 == x1 && y0 == y1) {
-            break;
-        }
-        int e2 = 2 * err;
-        if (e2 > -dy) {
-            err -= dy;
-            x0 += sx;
-        }
-        if (e2 < dx) {
-            err += dx;
-            y0 += sy;
-        }
-    }
+    if (clip_.isEmpty() || !display_) return;
+    display_->drawLine(clip_.x + from.x, clip_.y + from.y,
+                       clip_.x + to.x, clip_.y + to.y, gray);
 }
 
 // ============================================================================
@@ -195,83 +99,36 @@ void Canvas::drawLine(Point from, Point to, uint8_t gray) {
 // ============================================================================
 
 void Canvas::drawBitmap(const uint8_t* data, int x, int y, int w, int h) {
-    if (!fb_ || !data || w <= 0 || h <= 0 || clip_.isEmpty()) {
-        return;
-    }
-
-    for (int by = 0; by < h; by++) {
-        int absY = clip_.y + y + by;
-        if (absY < clip_.y || absY >= clip_.bottom()) {
-            continue;
-        }
-
-        for (int bx = 0; bx < w; bx++) {
-            int absX = clip_.x + x + bx;
-            if (absX < clip_.x || absX >= clip_.right()) {
-                continue;
-            }
-
-            int bmp_idx = by * w + bx;
-            uint8_t bmp_byte = data[bmp_idx / 2];
-            uint8_t gray_val;
-            if (bmp_idx & 1) {
-                gray_val = bmp_byte & 0xF0;
-            } else {
-                gray_val = (bmp_byte & 0x0F) << 4;
-            }
-
-            setPixel(absX, absY, gray_val);
-        }
-    }
+    if (!display_ || !data || w <= 0 || h <= 0 || clip_.isEmpty()) return;
+    display_->pushImage(clip_.x + x, clip_.y + y, w, h, data);
 }
 
 void Canvas::drawBitmapFg(const uint8_t* data, int x, int y, int w, int h,
                            uint8_t fgColor) {
-    if (!fb_ || !data || w <= 0 || h <= 0 || clip_.isEmpty()) {
-        return;
-    }
+    if (!display_ || !data || w <= 0 || h <= 0 || clip_.isEmpty()) return;
 
-    uint8_t fg4 = fgColor >> 4;  // 0-15
+    // 8bpp alpha 混合：创建临时 buffer 进行 alpha 混合后 pushImage
+    // fgColor 是 8bpp 灰度 (0x00=黑, 0xFF=白)
+    int size = w * h;
+    auto* mixed = static_cast<uint8_t*>(malloc(size));
+    if (!mixed) return;
 
-    for (int by = 0; by < h; by++) {
-        int absY = clip_.y + y + by;
-        if (absY < clip_.y || absY >= clip_.bottom()) {
-            continue;
-        }
-
-        for (int bx = 0; bx < w; bx++) {
-            int absX = clip_.x + x + bx;
-            if (absX < clip_.x || absX >= clip_.right()) {
-                continue;
-            }
-
-            // 提取 4bpp alpha 值
-            int bmp_idx = by * w + bx;
-            uint8_t bmp_byte = data[bmp_idx / 2];
-            uint8_t alpha;
-            if (bmp_idx & 1) {
-                alpha = bmp_byte >> 4;
-            } else {
-                alpha = bmp_byte & 0x0F;
-            }
-
-            if (alpha == 0) {
-                continue;  // 完全透明
-            }
-
-            if (alpha == 0x0F) {
-                // 完全不透明
-                setPixel(absX, absY, fgColor);
-            } else {
-                // 线性插值: result = bg + alpha * (fg - bg) / 15
-                uint8_t bg4 = getPixel(absX, absY) >> 4;
-                uint8_t result4 = static_cast<uint8_t>(
-                    bg4 + static_cast<int>(alpha) *
-                    (static_cast<int>(fg4) - static_cast<int>(bg4)) / 15);
-                setPixel(absX, absY, result4 << 4);
-            }
+    for (int i = 0; i < size; i++) {
+        uint8_t alpha = data[i];
+        if (alpha == 0) {
+            mixed[i] = 0xFF;  // 透明 → 白色背景
+        } else if (alpha == 0xFF) {
+            mixed[i] = fgColor;
+        } else {
+            // 线性插值: result = white + alpha * (fg - white) / 255
+            mixed[i] = static_cast<uint8_t>(
+                0xFF + static_cast<int>(alpha) *
+                (static_cast<int>(fgColor) - 0xFF) / 255);
         }
     }
+
+    display_->pushImage(clip_.x + x, clip_.y + y, w, h, mixed);
+    free(mixed);
 }
 
 // ============================================================================
@@ -316,158 +173,97 @@ static uint32_t nextCodepoint(const char** str) {
 }
 
 // ============================================================================
-//  Glyph 解压 (内部 static)
+//  文字渲染 (通过 font_engine)
 // ============================================================================
 
-/// 解压 zlib 压缩的 glyph bitmap
-static uint8_t* decompressGlyph(const EpdFont* font, const EpdGlyph* glyph,
-                                 size_t bitmapSize) {
-    auto* buf = static_cast<uint8_t*>(malloc(bitmapSize));
-    if (!buf) return nullptr;
-
-    auto* decomp = static_cast<tinfl_decompressor*>(
-        malloc(sizeof(tinfl_decompressor)));
-    if (!decomp) {
-        free(buf);
-        return nullptr;
-    }
-    tinfl_init(decomp);
-
-    size_t srcSize = glyph->compressed_size;
-    size_t outSize = bitmapSize;
-    tinfl_status status = tinfl_decompress(
-        decomp,
-        &font->bitmap[glyph->data_offset],
-        &srcSize,
-        buf, buf, &outSize,
-        TINFL_FLAG_PARSE_ZLIB_HEADER | TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
-    free(decomp);
-
-    if (status != TINFL_STATUS_DONE) {
-        free(buf);
-        return nullptr;
-    }
-    return buf;
-}
-
-// ============================================================================
-//  字符渲染 (private)
-// ============================================================================
-
-void Canvas::drawChar(const EpdFont* font, uint32_t codepoint,
-                      int* cursorX, int cursorY, uint8_t color) {
-    const EpdGlyph* glyph = epd_get_glyph(font, codepoint);
-    if (!glyph) return;
-
-    uint16_t w = glyph->width;
-    uint16_t h = glyph->height;
-    int byteWidth = (w / 2 + w % 2);
-    size_t bitmapSize = static_cast<size_t>(byteWidth) * h;
-
-    const uint8_t* bitmap = nullptr;
-    bool needFree = false;
-
-    if (bitmapSize > 0) {
-        if (font->compressed) {
-            bitmap = decompressGlyph(font, glyph, bitmapSize);
-            if (!bitmap) {
-                *cursorX += glyph->advance_x;
-                return;
-            }
-            needFree = true;
-        } else {
-            bitmap = &font->bitmap[glyph->data_offset];
-        }
-    }
-
-    // cursorX/cursorY 是屏幕绝对坐标
-    uint8_t fg4 = color >> 4;
-
-    for (int by = 0; by < h; by++) {
-        int absY = cursorY - glyph->top + by;
-        if (absY < clip_.y || absY >= clip_.bottom()) continue;
-
-        for (int bx = 0; bx < w; bx++) {
-            int absX = *cursorX + glyph->left + bx;
-            if (absX < clip_.x || absX >= clip_.right()) continue;
-
-            // 提取 4bpp alpha
-            uint8_t bm = bitmap[by * byteWidth + bx / 2];
-            uint8_t alpha;
-            if ((bx & 1) == 0) {
-                alpha = bm & 0x0F;
-            } else {
-                alpha = bm >> 4;
-            }
-
-            if (alpha == 0) continue;
-
-            if (alpha == 0x0F) {
-                // 完全不透明，直接写入前景色
-                setPixel(absX, absY, color);
-            } else {
-                // 读取实际背景像素进行 alpha 混合
-                uint8_t bg4 = getPixel(absX, absY) >> 4;
-                uint8_t color4 = static_cast<uint8_t>(
-                    bg4 + static_cast<int>(alpha) *
-                    (static_cast<int>(fg4) - static_cast<int>(bg4)) / 15);
-                setPixel(absX, absY, color4 << 4);
-            }
-        }
-    }
-
-    if (needFree) {
-        free(const_cast<uint8_t*>(bitmap));
-    }
-    *cursorX += glyph->advance_x;
-}
-
-// ============================================================================
-//  文字渲染 (public)
-// ============================================================================
-
-void Canvas::drawText(const EpdFont* font, const char* text,
-                      int x, int y, uint8_t color) {
-    if (!fb_ || !font || !text || *text == '\0' || clip_.isEmpty()) return;
+void Canvas::drawText(font_engine_t* engine, const char* text,
+                      int x, int y, uint8_t fontSize, uint8_t color) {
+    if (!display_ || !engine || !text || *text == '\0' || clip_.isEmpty()) return;
 
     // 局部坐标 → 屏幕绝对坐标
     int cursorX = clip_.x + x;
     int cursorY = clip_.y + y;
 
+    const char* ptr = text;
     uint32_t cp;
-    while ((cp = nextCodepoint(&text)) != 0) {
+    while ((cp = nextCodepoint(&ptr)) != 0) {
         if (cp == '\n') break;
-        drawChar(font, cp, &cursorX, cursorY, color);
+
+        font_scaled_glyph_t scaled;
+        if (!font_engine_get_scaled_glyph(engine, cp, fontSize, &scaled)) {
+            continue;
+        }
+
+        if (scaled.bitmap && scaled.width > 0 && scaled.height > 0) {
+            // glyph 基线定位: drawX = cursor + x_offset, drawY = cursor(baseline) - y_offset
+            int drawX = cursorX + scaled.x_offset;
+            int drawY = cursorY - scaled.y_offset;
+
+            if (color == Color::Black) {
+                // 黑色文字：bitmap 中 0x00=黑(前景), 0xFF=白(背景)
+                // 使用 alpha 混合：对白色背景上绘制文字
+                // bitmap 值越小越黑，作为 alpha 的反转
+                int size = scaled.width * scaled.height;
+                auto* blended = static_cast<uint8_t*>(malloc(size));
+                if (blended) {
+                    for (int i = 0; i < size; i++) {
+                        // glyph bitmap: 0x00=全黑(前景), 0xFF=全白(背景)
+                        // 我们需要: alpha = 255 - bitmap_value
+                        // result = bg + alpha * (fg - bg) / 255
+                        // 简化为: 对白色背景上绘制 -> result = bitmap_value (直接)
+                        // 但如果 color != black, 需要混合
+                        blended[i] = scaled.bitmap[i];  // glyph 本身就是灰度
+                    }
+                    display_->pushImage(drawX, drawY, scaled.width, scaled.height, blended);
+                    free(blended);
+                }
+            } else {
+                // 非黑色文字：需要 alpha 混合
+                int size = scaled.width * scaled.height;
+                auto* blended = static_cast<uint8_t*>(malloc(size));
+                if (blended) {
+                    for (int i = 0; i < size; i++) {
+                        // alpha = 255 - bitmap (bitmap 0x00=前景=不透明, 0xFF=背景=透明)
+                        uint8_t alpha = 255 - scaled.bitmap[i];
+                        if (alpha == 0) {
+                            blended[i] = 0xFF;  // 透明
+                        } else {
+                            // 在白色背景上混合
+                            blended[i] = static_cast<uint8_t>(
+                                0xFF + static_cast<int>(alpha) *
+                                (static_cast<int>(color) - 0xFF) / 255);
+                        }
+                    }
+                    display_->pushImage(drawX, drawY, scaled.width, scaled.height, blended);
+                    free(blended);
+                }
+            }
+
+            // 释放缩放后的 bitmap
+            if (scaled.bitmap) {
+                free(scaled.bitmap);
+            }
+        }
+
+        cursorX += scaled.advance_x;
     }
 }
 
-void Canvas::drawTextN(const EpdFont* font, const char* text, int maxBytes,
-                        int x, int y, uint8_t color) {
-    if (!fb_ || !font || !text || maxBytes <= 0 || clip_.isEmpty()) return;
-
-    const char* end = text + maxBytes;
-    int cursorX = clip_.x + x;
-    int cursorY = clip_.y + y;
-
-    while (text < end && *text != '\0') {
-        int charLen = utf8ByteLen(static_cast<uint8_t>(*text));
-        if (text + charLen > end) break;
-        uint32_t cp = nextCodepoint(&text);
-        if (cp == 0 || cp == '\n') break;
-        drawChar(font, cp, &cursorX, cursorY, color);
-    }
-}
-
-int Canvas::measureText(const EpdFont* font, const char* text) const {
-    if (!font || !text || *text == '\0') return 0;
+int Canvas::measureText(font_engine_t* engine, const char* text, uint8_t fontSize) const {
+    if (!engine || !text || *text == '\0') return 0;
 
     int width = 0;
+    const char* ptr = text;
     uint32_t cp;
-    while ((cp = nextCodepoint(&text)) != 0) {
+    while ((cp = nextCodepoint(&ptr)) != 0) {
         if (cp == '\n') break;
-        const EpdGlyph* glyph = epd_get_glyph(font, cp);
-        if (glyph) {
-            width += glyph->advance_x;
+        font_scaled_glyph_t scaled;
+        if (font_engine_get_scaled_glyph(engine, cp, fontSize, &scaled)) {
+            width += scaled.advance_x;
+            // 释放 bitmap（measureText 不需要 bitmap，但 API 会分配）
+            if (scaled.bitmap) {
+                free(scaled.bitmap);
+            }
         }
     }
     return width;

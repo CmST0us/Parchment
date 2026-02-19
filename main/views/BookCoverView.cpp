@@ -22,8 +22,9 @@ void BookCoverView::setFormatTag(const std::string& tag) {
     setNeedsDisplay();
 }
 
-void BookCoverView::setFont(const EpdFont* font) {
-    font_ = font;
+void BookCoverView::setFont(font_engine_t* engine, uint8_t fontSize) {
+    engine_ = engine;
+    fontSize_ = fontSize;
 }
 
 void BookCoverView::onDraw(ink::Canvas& canvas) {
@@ -48,13 +49,13 @@ void BookCoverView::onDraw(ink::Canvas& canvas) {
                     ink::Color::Dark);
 
     // 居中格式标签
-    if (font_ && !formatTag_.empty()) {
-        int textW = canvas.measureText(font_, formatTag_.c_str());
+    if (engine_ && fontSize_ > 0 && !formatTag_.empty()) {
+        int textW = canvas.measureText(engine_, formatTag_.c_str(), fontSize_);
         int textX = (w - textW) / 2;
-        // 基线大约在垂直中心偏下（字体高度约为像素大小的 0.8 倍）
+        // 基线大约在垂直中心偏下
         int textY = h / 2 + 4;
-        canvas.drawText(font_, formatTag_.c_str(), textX, textY,
-                        ink::Color::Dark);
+        canvas.drawText(engine_, formatTag_.c_str(), textX, textY,
+                        fontSize_, ink::Color::Dark);
     }
 }
 

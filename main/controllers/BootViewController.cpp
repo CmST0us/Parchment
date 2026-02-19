@@ -14,7 +14,6 @@
 extern "C" {
 #include "esp_log.h"
 #include "book_store.h"
-#include "ui_font.h"
 }
 
 static const char* TAG = "BootVC";
@@ -27,9 +26,7 @@ BootViewController::BootViewController(ink::Application& app)
 void BootViewController::viewDidLoad() {
     ESP_LOGI(TAG, "viewDidLoad");
 
-    const EpdFont* fontLarge = ui_font_get(28);
-    const EpdFont* fontMedium = ui_font_get(20);
-    const EpdFont* fontSmall = ui_font_get(16);
+    font_engine_t* fe = app_.fontEngine();
 
     // 根 View: FlexBox Column, 居中对齐（由 contentArea_ 约束尺寸）
     view_ = std::make_unique<ink::View>();
@@ -56,7 +53,7 @@ void BootViewController::viewDidLoad() {
 
     // ── 标题 "Parchment" (28px, Black, 居中) ──
     auto title = std::make_unique<ink::TextLabel>();
-    title->setFont(fontLarge);
+    title->setFont(fe, 28);
     title->setText("Parchment");
     title->setColor(ink::Color::Black);
     title->setAlignment(ink::Align::Center);
@@ -65,7 +62,7 @@ void BootViewController::viewDidLoad() {
 
     // ── 副标题 "墨水屏阅读器" (20px, Dark, 居中) ──
     auto subtitle = std::make_unique<ink::TextLabel>();
-    subtitle->setFont(fontMedium);
+    subtitle->setFont(fe, 20);
     subtitle->setText("墨水屏阅读器");
     subtitle->setColor(ink::Color::Dark);
     subtitle->setAlignment(ink::Align::Center);
@@ -80,7 +77,7 @@ void BootViewController::viewDidLoad() {
 
     // ── 状态文字 (16px, Medium, 居中) ──
     auto status = std::make_unique<ink::TextLabel>();
-    status->setFont(fontSmall);
+    status->setFont(fe, 16);
     status->setText("正在初始化...");
     status->setColor(ink::Color::Medium);
     status->setAlignment(ink::Align::Center);

@@ -11,6 +11,10 @@
 #include "ink_ui/core/Canvas.h"
 #include "ink_ui/core/View.h"
 
+extern "C" {
+struct font_engine_t;
+}
+
 namespace ink {
 
 /// 按钮样式
@@ -31,10 +35,10 @@ public:
     /// 设置按钮文字（相同文字不触发重绘）
     void setLabel(const std::string& label);
 
-    /// 设置字体
-    void setFont(const EpdFont* font);
+    /// 设置字体引擎和字号
+    void setFont(font_engine_t* engine, uint8_t fontSize);
 
-    /// 设置图标数据（32x32 4bpp）
+    /// 设置图标数据（32x32 8bpp）
     void setIcon(const uint8_t* iconData);
 
     /// 设置按钮样式
@@ -49,7 +53,8 @@ public:
     // ── Getters ──
 
     const std::string& label() const { return label_; }
-    const EpdFont* font() const { return font_; }
+    font_engine_t* fontEngine() const { return engine_; }
+    uint8_t fontSize() const { return fontSize_; }
     const uint8_t* icon() const { return icon_; }
     ButtonStyle style() const { return style_; }
     bool enabled() const { return enabled_; }
@@ -66,7 +71,8 @@ private:
     static constexpr int kIconSize = 32;   ///< 图标尺寸
 
     std::string label_;
-    const EpdFont* font_ = nullptr;
+    font_engine_t* engine_ = nullptr;
+    uint8_t fontSize_ = 0;
     const uint8_t* icon_ = nullptr;
     ButtonStyle style_ = ButtonStyle::Primary;
     std::function<void()> onTap_;

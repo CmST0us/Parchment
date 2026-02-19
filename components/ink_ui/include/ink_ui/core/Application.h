@@ -8,10 +8,14 @@
 #include <memory>
 
 #include "ink_ui/core/Event.h"
-#include "ink_ui/core/EpdDriver.h"
 #include "ink_ui/core/RenderEngine.h"
 #include "ink_ui/core/GestureRecognizer.h"
 #include "ink_ui/core/NavigationController.h"
+
+// 前向声明字体引擎
+extern "C" {
+struct font_engine_t;
+}
 
 namespace ink {
 
@@ -22,7 +26,7 @@ class Application {
 public:
     Application() = default;
 
-    /// 初始化所有子系统
+    /// 初始化所有子系统 (M5.begin + 字体引擎 + RenderEngine + GestureRecognizer)
     bool init();
 
     /// 启动主事件循环（永不返回）
@@ -43,11 +47,15 @@ public:
     /// 获取状态栏 View（供外部设置字体等）
     StatusBarView* statusBar() { return statusBar_; }
 
+    /// 获取字体引擎
+    font_engine_t* fontEngine() { return fontEngine_; }
+
 private:
     NavigationController navigator_;
     QueueHandle_t eventQueue_ = nullptr;
     std::unique_ptr<RenderEngine> renderEngine_;
     std::unique_ptr<GestureRecognizer> gesture_;
+    font_engine_t* fontEngine_ = nullptr;
 
     // ── Window View 树 ──
     std::unique_ptr<View> windowRoot_;

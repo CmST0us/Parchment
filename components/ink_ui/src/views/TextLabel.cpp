@@ -6,6 +6,10 @@
 #include "ink_ui/views/TextLabel.h"
 #include "ink_ui/core/Canvas.h"
 
+extern "C" {
+#include "font_engine/font_engine.h"
+}
+
 #include <cstring>
 #include <vector>
 
@@ -21,8 +25,9 @@ void TextLabel::setText(const std::string& text) {
     setNeedsDisplay();
 }
 
-void TextLabel::setFont(const EpdFont* font) {
-    font_ = font;
+void TextLabel::setFont(font_engine_t* engine, uint8_t fontSize) {
+    engine_ = engine;
+    fontSize_ = fontSize;
     setNeedsDisplay();
 }
 
@@ -41,10 +46,15 @@ void TextLabel::setMaxLines(int maxLines) {
     setNeedsDisplay();
 }
 
-void TextLabel::onDraw(Canvas& canvas) {
-    if (!font_ || text_.empty()) return;
+int TextLabel::scaledAscender() const {
+    if (!engine_ || fontSize_ == 0) return 0;
+    return engine_->header.ascender * fontSize_ / engine_->header.font_height;
+}
 
-    int lineHeight = font_->advance_y;
+void TextLabel::onDraw(Canvas& canvas) {
+    if (!engine_ || fontSize_ == 0 || text_.empty()) return;
+
+    int lineHeight = fontSize_;
     if (lineHeight <= 0) return;
 
     // 分行：按 \n 切割
@@ -78,11 +88,10 @@ void TextLabel::onDraw(Canvas& canvas) {
         auto& [linePtr, lineLen] = lines[i];
         if (lineLen <= 0) continue;
 
-        // 临时构造 null-terminated 行字符串
-        // measureText 需要 null-terminated string
+        // 构造 null-terminated 行字符串
         std::string lineStr(linePtr, lineLen);
 
-        int textWidth = canvas.measureText(font_, lineStr.c_str());
+        int textWidth = canvas.measureText(engine_, lineStr.c_str(), fontSize_);
 
         // 水平对齐
         int x = 0;
@@ -101,15 +110,15 @@ void TextLabel::onDraw(Canvas& canvas) {
         }
 
         // 基线 y = startY + ascender（从行顶部到基线的距离）
-        int baselineY = startY + i * lineHeight + font_->ascender;
-        canvas.drawTextN(font_, linePtr, lineLen, x, baselineY, color_);
+        int baselineY = startY + i * lineHeight + scaledAscender();
+        canvas.drawText(engine_, lineStr.c_str(), x, baselineY, fontSize_, color_);
     }
 }
 
 Size TextLabel::intrinsicSize() const {
-    if (!font_ || text_.empty()) return {0, 0};
+    if (!engine_ || fontSize_ == 0 || text_.empty()) return {0, 0};
 
-    int lineHeight = font_->advance_y;
+    int lineHeight = fontSize_;
 
     // 计算行数和最大宽度
     int numLines = 1;
@@ -131,8 +140,7 @@ Size TextLabel::intrinsicSize() const {
         if (*p == '\n' || *p == '\0') {
             if (lineIdx < numLines) {
                 std::string lineStr(lineStart, p - lineStart);
-                // measureText 需要一个 Canvas 实例，但 intrinsicSize 是 const 的
-                // 我们用 measureText 的静态实现：遍历 glyph advance_x
+                // 通过 font_engine_get_scaled_glyph 逐字符测量
                 int w = 0;
                 const char* tp = lineStr.c_str();
                 while (*tp) {
@@ -157,9 +165,12 @@ Size TextLabel::intrinsicSize() const {
                     }
                     tp += len;
 
-                    const EpdGlyph* glyph = epd_get_glyph(font_, cp);
-                    if (glyph) {
-                        w += glyph->advance_x;
+                    font_scaled_glyph_t glyph;
+                    if (font_engine_get_scaled_glyph(engine_, cp, fontSize_, &glyph)) {
+                        w += glyph.advance_x;
+                        if (glyph.bitmap) {
+                            free(glyph.bitmap);
+                        }
                     }
                 }
                 if (w > maxWidth) maxWidth = w;

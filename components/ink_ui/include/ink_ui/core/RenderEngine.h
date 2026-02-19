@@ -1,15 +1,18 @@
 /**
  * @file RenderEngine.h
- * @brief 墨水屏渲染引擎 — 4 阶段渲染循环。
+ * @brief 墨水屏渲染引擎 — 4 阶段渲染循环 (M5GFX 后端)。
  *
- * Layout → 收集脏区域 → 重绘 → 快速刷新。
+ * Layout → 收集脏区域 → 重绘 → M5GFX display() 刷新。
  */
 
 #pragma once
 
 #include "ink_ui/core/Geometry.h"
 #include "ink_ui/core/View.h"
-#include "ink_ui/core/EpdDriver.h"
+
+// 前向声明 M5GFX
+namespace m5gfx { class M5GFX; }
+using M5GFX = m5gfx::M5GFX;
 
 namespace ink {
 
@@ -22,21 +25,20 @@ struct DirtyEntry {
     RefreshHint hint = RefreshHint::Auto;
 };
 
-/// 墨水屏渲染引擎
+/// 墨水屏渲染引擎 (M5GFX 后端)
 class RenderEngine {
 public:
-    /// 构造，绑定 EpdDriver
-    explicit RenderEngine(EpdDriver& driver);
+    /// 构造，绑定 M5GFX display
+    explicit RenderEngine(M5GFX* display);
 
-    /// 执行一次完整渲染循环（5 阶段）
+    /// 执行一次完整渲染循环（4 阶段）
     void renderCycle(View* rootView);
 
     /// 损伤修复：对指定区域裁剪重绘并刷新
     void repairDamage(View* rootView, const Rect& damage);
 
 private:
-    EpdDriver& driver_;
-    uint8_t* fb_;
+    M5GFX* display_;
 
     DirtyEntry dirtyRegions_[MAX_DIRTY_REGIONS];
     int dirtyCount_ = 0;
@@ -51,7 +53,7 @@ private:
     void drawDirty(View* rootView);
     void drawView(View* view, bool forced);
 
-    // Phase 4: Flush to EPD
+    // Phase 4: Flush to EPD (via M5GFX display())
     void flush();
 
     /// 添加一个脏区域
@@ -62,9 +64,6 @@ private:
 
     /// 在 damage 区域内重绘 View 子树（用于 repairDamage）
     void repairDrawView(View* view, const Rect& damage);
-
-    /// 逻辑坐标矩形 → 物理坐标矩形
-    static Rect logicalToPhysical(const Rect& lr);
 };
 
 } // namespace ink

@@ -68,10 +68,10 @@ void PageIndicatorView::setPage(int page, int total) {
     updateDisplay();
 }
 
-void PageIndicatorView::setFont(const EpdFont* font) {
-    if (pageLabel_) pageLabel_->setFont(font);
-    if (prevButton_) prevButton_->setFont(font);
-    if (nextButton_) nextButton_->setFont(font);
+void PageIndicatorView::setFont(font_engine_t* engine, uint8_t fontSize) {
+    if (pageLabel_) pageLabel_->setFont(engine, fontSize);
+    if (prevButton_) prevButton_->setFont(engine, fontSize);
+    if (nextButton_) nextButton_->setFont(engine, fontSize);
 }
 
 void PageIndicatorView::setOnPageChange(std::function<void(int)> callback) {

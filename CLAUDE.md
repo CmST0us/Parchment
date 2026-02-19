@@ -6,39 +6,46 @@ M5Stack PaperS3 (ESP32-S3) 墨水屏阅读器项目。
 
 - **芯片**: ESP32-S3, 8MB PSRAM, 16MB Flash
 - **框架**: ESP-IDF v5.5.1
-- **显示**: ED047TC2 E-Ink (960x540), 通过 epdiy 库驱动
-- **触摸**: GT911 电容触摸 (I2C)
-- **存储**: SPI SD 卡, 挂载于 `/sdcard`
-- **语言**: C
+- **显示**: ED047TC2 E-Ink (960x540), 通过 M5GFX/M5Unified 驱动
+- **触摸**: GT911 电容触摸 (通过 M5Unified Touch_Class)
+- **存储**: SPI SD 卡, 挂载于 `/sdcard`; LittleFS 字体分区
+- **语言**: C++17 (ink_ui), C (font_engine, 基础组件)
 
 ## 项目结构
 
 ```
 main/
-  main.c          - 应用入口，硬件初始化 + ui_core 启动
-  board.c/h       - M5PaperS3 板级定义（电源保持引脚等）
+  main.cpp                - 应用入口 (NVS + SD + InkUI 启动)
+  controllers/            - ViewController 实现 (Boot/Library/Reader)
+  views/                  - 自定义 View (BootLogoView, BookCoverView)
 components/
-  epd_driver/     - E-Ink 显示驱动封装（基于 epdiy）
-  epdiy/          - epdiy 库（含 M5PaperS3 板级 epd_board_m5papers3.c）
-  gt911/          - GT911 触摸驱动
-  sd_storage/     - SD 卡挂载
-  ui_core/        - 生产级 UI 框架
-    ui_core.c/h       - 主循环
-    ui_event.c/h      - FreeRTOS 事件队列
-    ui_page.c/h       - 页面栈（生命周期回调）
-    ui_canvas.c/h     - 绘图原语（540x960 逻辑坐标，portrait）
-    ui_render.c/h     - 脏区域追踪 + 局部刷新
-    ui_touch.c/h      - GT911 手势识别状态机
+  ink_ui/                 - UIKit 风格 UI 框架 (C++17, M5GFX 后端)
+    core/                 - View, Canvas, RenderEngine, GestureRecognizer, Application
+    views/                - TextLabel, ButtonView, HeaderView, StatusBarView 等
+  font_engine/            - 自定义 .bin 字体引擎 (4bpp RLE + 多级 PSRAM 缓存)
+  ui_icon/                - 32×32 4bpp 图标资源 (Tabler Icons)
+  M5GFX/                  - M5GFX 显示库 (git submodule)
+  M5Unified/              - M5Unified 硬件抽象 (git submodule)
+  esp_littlefs/           - LittleFS 文件系统 (git submodule)
+  sd_storage/             - SD 卡挂载
+  settings_store/         - NVS 设置存储
+  book_store/             - 书籍索引管理
+  text_encoding/          - GBK/UTF-8 编码转换
+tools/
+  generate_bin_font.py    - .bin 字体文件生成工具
+  icons/                  - 图标转换工具
+fonts_data/               - 字体文件 (LittleFS 镜像, 需要先生成 .bin)
 docs/
-  ui-wireframe-spec.md - 生产 UI 线框规格（8 个页面）
-openspec/              - OpenSpec 变更管理
+  ui-wireframe-spec.md    - UI 线框规格
+openspec/                 - OpenSpec 变更管理
 ```
 
 ## 编码规范
 
-- 使用 Google C 代码风格
+- C++17, `-fno-exceptions -fno-rtti`
+- 使用 Google 代码风格
 - 类和函数声明需要注释
-- 文档使用简体中文，技术术语（API、REST 等）保留英文
+- 文档使用简体中文，技术术语保留英文
 - 源文件命名使用英文
 
 ## 构建
@@ -47,33 +54,49 @@ openspec/              - OpenSpec 变更管理
 # ESP-IDF 环境
 export IDF_PATH=/Users/eki/esp/esp-idf-5.5.1
 source $IDF_PATH/export.sh
+
+# 生成字体文件 (首次或字体更新时)
+python tools/generate_bin_font.py <font.ttf> -o fonts_data/reading_font.bin --charset gb2312 --size 32
+
+# 构建烧录
 idf.py build
 idf.py flash monitor
 ```
 
 ## 关键架构知识
 
-### EPD 电源管理
-epdiy 的 `epd_fullclear()`、`epd_hl_update_screen()`、`epd_clear()` 等函数**不会自动管理电源**。调用方必须在这些函数前后显式调用 `epd_poweron()` / `epd_poweroff()`。`epd_driver.c` 封装层已处理此逻辑。
+### 显示驱动 (M5GFX)
+- `M5.begin()` 自动初始化硬件 (EPD + 触摸 + 电源)
+- `M5.Display.setAutoDisplay(false)` — 手动控制刷新时机
+- `M5.Display.setEpdMode(epd_quality)` — 默认高质量灰度刷新
+- `display->display(x, y, w, h)` — 局部刷新，逻辑坐标，无需手动变换
+- 8bpp 灰度 API (0x00=黑, 0xFF=白), Panel_EPD 内部处理 dithering
 
 ### EPD 刷新模式
-- 全屏刷新: `MODE_GL16`（不闪黑，灰度准确）
-- 局部刷新: `MODE_DU`（不闪黑，单色直接更新，最快）
-- `MODE_GC16` 会闪黑，仅在需要彻底消除残影时使用（如 `epd_fullclear`）
+- `epd_quality`: 高质量灰度 (默认)
+- `epd_text`: 文字优化
+- `epd_fast`: 快速刷新
+- `epd_fastest`: 最快 (二值)
 
 ### 显示坐标系
 - 逻辑坐标: 540x960 portrait (x: 0-539 左→右, y: 0-959 上→下)
-- 物理 framebuffer: 960x540 landscape
-- 像素映射: `px = ly, py = (539 - lx)` — 转置 + X翻转
-- 局部刷新物理坐标: `phys_x = y0, phys_y = 540 - x1`
-- 触摸坐标: GT911 直通，无需翻转
+- M5GFX `setRotation()` 自动处理坐标变换，代码中只使用逻辑坐标
+- 触摸坐标: M5.Touch 输出逻辑坐标
 
-### UI 框架
-- ui_core 使用页面栈模型，通过 `ui_page_push()` 推入页面
-- 页面栈为空时事件循环正常运行但不分发事件
-- 帧缓冲区: 4bpp 灰度（每字节 2 像素），位于 PSRAM
-- ui_canvas 绘图原语: pixel, line, hline, vline, rect, fill_rect, fill, bitmap
+### InkUI 框架
+- View 树: UIKit 风格嵌套, `ink::View` 基类, `unique_ptr` 所有权
+- 布局: FlexBox (Column/Row + flexGrow + gap + padding)
+- 渲染: 脏区域追踪 + `display->display()` 局部刷新
+- Canvas: RAII — 构造设 clipRect, 析构恢复
+- 页面: ViewController + NavigationController 页面栈
+- 手势: M5.Touch 20ms 轮询, Tap/LongPress/Swipe 状态机
+- 颜色: 8bpp 常量 Black(0x00)/Dark(0x44)/Medium(0x88)/Light(0xCC)/White(0xFF)/Clear(0x01 哨兵)
+- 命名空间: `ink::`
 
-### 当前状态
-- main.c 有临时触摸验证页面（待清理后接入生产页面）
-- `docs/ui-wireframe-spec.md` 定义了 8 个目标页面的线框
+### 字体系统
+- **格式**: 自定义 .bin (128B header + 16B glyph entries + RLE bitmap)
+- **基础字号**: 32px, 支持缩放到 16-32px (面积加权算法)
+- **缓存**: 常用字 (ASCII + CJK 标点) → 页面缓存 (5 页滑窗) → LRU 回收池 (1500 条目)
+- **API**: `font_engine_t*` + `uint8_t fontSize` 替代旧 `EpdFont*`
+- **存储**: LittleFS 分区, `fonts_data/reading_font.bin`
+- **生成**: `tools/generate_bin_font.py` (FreeType → 4bpp RLE → .bin)

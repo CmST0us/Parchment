@@ -36,10 +36,11 @@ void HeaderView::setRightIcon(const uint8_t* iconData, std::function<void()> onT
     rebuild();
 }
 
-void HeaderView::setFont(const EpdFont* font) {
-    font_ = font;
+void HeaderView::setFont(font_engine_t* engine, uint8_t fontSize) {
+    engine_ = engine;
+    fontSize_ = fontSize;
     if (titleLabel_) {
-        titleLabel_->setFont(font);
+        titleLabel_->setFont(engine, fontSize);
     }
 }
 
@@ -74,7 +75,7 @@ void HeaderView::rebuild() {
     label->setColor(Color::Black);
     label->setAlignment(Align::Center);
     label->flexGrow_ = 1;
-    if (font_) label->setFont(font_);
+    if (engine_) label->setFont(engine_, fontSize_);
     if (!currentTitle.empty()) label->setText(currentTitle);
     titleLabel_ = label.get();
     addSubview(std::move(label));

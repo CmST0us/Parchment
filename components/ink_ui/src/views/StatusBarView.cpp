@@ -8,6 +8,10 @@
 #include "ink_ui/views/StatusBarView.h"
 #include "ink_ui/core/Canvas.h"
 
+extern "C" {
+#include "font_engine/font_engine.h"
+}
+
 #include <ctime>
 #include <cstdio>
 
@@ -16,8 +20,9 @@ namespace ink {
 StatusBarView::StatusBarView() {
 }
 
-void StatusBarView::setFont(const EpdFont* font) {
-    font_ = font;
+void StatusBarView::setFont(font_engine_t* engine, uint8_t fontSize) {
+    engine_ = engine;
+    fontSize_ = fontSize;
 }
 
 void StatusBarView::updateTime() {
@@ -31,16 +36,14 @@ void StatusBarView::updateTime() {
 }
 
 void StatusBarView::onDraw(Canvas& canvas) {
-    int w = frame().w;
     int h = frame().h;
 
     // 时间文字 (左侧, 垂直居中)
-    if (font_) {
-        int baselineY = (h - font_->advance_y) / 2 + font_->ascender;
-        canvas.drawText(font_, timeStr_, 12, baselineY, Color::Dark);
+    if (engine_ && fontSize_ > 0) {
+        int ascender = engine_->header.ascender * fontSize_ / engine_->header.font_height;
+        int baselineY = (h - fontSize_) / 2 + ascender;
+        canvas.drawText(engine_, timeStr_, 12, baselineY, fontSize_, Color::Dark);
     }
-
-    // 底部 1px 分隔线（已移除：在黑色 Header 旁会形成可见亮线）
 }
 
 Size StatusBarView::intrinsicSize() const {

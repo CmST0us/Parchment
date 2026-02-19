@@ -1,12 +1,12 @@
 idf_component_register(
-    SRCS "main.cpp" "board.c"
+    SRCS "main.cpp"
          "controllers/BootViewController.cpp"
          "controllers/LibraryViewController.cpp"
          "controllers/ReaderViewController.cpp"
          "views/BootLogoView.cpp"
          "views/BookCoverView.cpp"
-    INCLUDE_DIRS "." "pages"
-    PRIV_REQUIRES "epd_driver" "gt911" "sd_storage" "settings_store" "ui_core" "ink_ui" "book_store" "text_encoding"
+    INCLUDE_DIRS "."
+    PRIV_REQUIRES "sd_storage" "settings_store" "ink_ui" "book_store" "text_encoding" "font_engine" "ui_icon" "M5GFX" "M5Unified" "esp_littlefs"
 )
 
 # C++17 编译选项

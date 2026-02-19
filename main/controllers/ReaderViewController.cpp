@@ -8,12 +8,14 @@
 #include <cstdio>
 #include <cstring>
 
+#include <M5Unified.h>
+
 extern "C" {
 #include "esp_log.h"
 #include "esp_heap_caps.h"
-#include "ui_font.h"
 #include "ui_icon.h"
 #include "text_encoding.h"
+#include "font_engine/font_engine.h"
 }
 
 static const char* TAG = "ReaderVC";
@@ -72,14 +74,14 @@ void ReaderViewController::viewDidLoad() {
     // 加载阅读偏好
     settings_store_load_prefs(&prefs_);
 
-    const EpdFont* fontSmall = ui_font_get(20);
-    const EpdFont* fontReading = ui_font_get(prefs_.font_size);
-    if (!fontReading) fontReading = fontSmall;
+    font_engine_t* fe = app_.fontEngine();
+    uint8_t readingFontSize = prefs_.font_size;
+    if (readingFontSize == 0) readingFontSize = 24;
 
     int margin = prefs_.margin;
-    lineHeight_ = fontReading->advance_y * prefs_.line_spacing / 10;
-    if (lineHeight_ < fontReading->advance_y) {
-        lineHeight_ = fontReading->advance_y;
+    lineHeight_ = readingFontSize * prefs_.line_spacing / 10;
+    if (lineHeight_ < static_cast<int>(readingFontSize)) {
+        lineHeight_ = readingFontSize;
     }
 
     // 根 View（由 contentArea_ 约束尺寸）
@@ -90,7 +92,7 @@ void ReaderViewController::viewDidLoad() {
 
     // 顶部 HeaderView（返回按钮 + 书名）
     auto header = std::make_unique<ink::HeaderView>();
-    header->setFont(fontSmall);
+    header->setFont(fe, 20);
     header->setTitle(bookDisplayName());
     header->setLeftIcon(UI_ICON_ARROW_LEFT.data, [this]() {
         ESP_LOGI(TAG, "Back button tapped");
@@ -101,7 +103,7 @@ void ReaderViewController::viewDidLoad() {
 
     // 顶部文件名标示
     auto headerLbl = std::make_unique<ink::TextLabel>();
-    headerLbl->setFont(fontSmall);
+    headerLbl->setFont(fe, 20);
     headerLbl->setText(bookDisplayName());
     headerLbl->setColor(ink::Color::Dark);
     headerLbl->flexBasis_ = 24;
@@ -130,7 +132,7 @@ void ReaderViewController::viewDidLoad() {
 
     // 内容文本 TextLabel（多行）
     auto content = std::make_unique<ink::TextLabel>();
-    content->setFont(fontReading);
+    content->setFont(fe, readingFontSize);
     content->setColor(ink::Color::Black);
     content->setMaxLines(0); // 不限制行数
     content->setAlignment(ink::Align::Start);
@@ -149,7 +151,7 @@ void ReaderViewController::viewDidLoad() {
     footer->flexStyle_.alignItems = ink::Align::Center;
 
     auto fLeft = std::make_unique<ink::TextLabel>();
-    fLeft->setFont(fontSmall);
+    fLeft->setFont(fe, 20);
     fLeft->setColor(ink::Color::Dark);
     fLeft->setAlignment(ink::Align::Start);
     fLeft->flexGrow_ = 1;
@@ -157,7 +159,7 @@ void ReaderViewController::viewDidLoad() {
     footer->addSubview(std::move(fLeft));
 
     auto fRight = std::make_unique<ink::TextLabel>();
-    fRight->setFont(fontSmall);
+    fRight->setFont(fe, 20);
     fRight->setColor(ink::Color::Dark);
     fRight->setAlignment(ink::Align::End);
     fRight->flexGrow_ = 1;
@@ -178,8 +180,8 @@ void ReaderViewController::viewDidLoad() {
 
     // 计算布局参数
     // VC 可用高度 = 屏幕高度 - 状态栏(20px)
-    int vcHeight = ink::kScreenHeight - 20;
-    contentAreaWidth_ = ink::kScreenWidth - 2 * margin;
+    int vcHeight = M5.Display.height() - 20;
+    contentAreaWidth_ = M5.Display.width() - 2 * margin;
     // 可用内容高度：VC高度 - header(48) - headerLabel(24) - footer(32) - padding
     contentAreaHeight_ = vcHeight - 48 - 24 - 32 - 16;
 
@@ -316,13 +318,15 @@ void ReaderViewController::paginate() {
     pages_.clear();
     if (!textBuffer_ || textSize_ == 0) return;
 
-    const EpdFont* font = ui_font_get(prefs_.font_size);
-    if (!font) return;
+    font_engine_t* fe = app_.fontEngine();
+    uint8_t fontSize = prefs_.font_size;
+    if (fontSize == 0) fontSize = 24;
+    if (!fe) return;
 
     int maxWidth = contentAreaWidth_;
     int maxHeight = contentAreaHeight_;
     int lh = lineHeight_;
-    if (lh <= 0) lh = font->advance_y;
+    if (lh <= 0) lh = fontSize;
 
     int linesPerPage = maxHeight / lh;
     if (linesPerPage <= 0) linesPerPage = 1;
@@ -356,38 +360,33 @@ void ReaderViewController::paginate() {
                 int charLen = utf8CharLen(static_cast<uint8_t>(textBuffer_[offset]));
                 if (offset + charLen > textSize_) break;
 
-                // 测量这个字符的宽度
-                char saved = textBuffer_[offset + charLen];
-                textBuffer_[offset + charLen] = '\0';
-
-                // 测量从 lineStart 到 offset+charLen 的总宽度
-                // 为效率，只测量当前字符宽度
-                int charWidth = 0;
-                {
-                    // 解码 codepoint 获取 glyph advance
-                    uint32_t cp = 0;
-                    uint8_t b = static_cast<uint8_t>(textBuffer_[offset]);
-                    if (b < 0x80) {
-                        cp = b;
-                    } else if ((b & 0xE0) == 0xC0) {
-                        cp = b & 0x1F;
-                        for (int i = 1; i < charLen; i++)
-                            cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
-                    } else if ((b & 0xF0) == 0xE0) {
-                        cp = b & 0x0F;
-                        for (int i = 1; i < charLen; i++)
-                            cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
-                    } else if ((b & 0xF8) == 0xF0) {
-                        cp = b & 0x07;
-                        for (int i = 1; i < charLen; i++)
-                            cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
-                    }
-
-                    const EpdGlyph* glyph = epd_get_glyph(font, cp);
-                    charWidth = glyph ? glyph->advance_x : font->advance_y / 2;
+                // 解码 codepoint 获取 glyph advance
+                uint32_t cp = 0;
+                uint8_t b = static_cast<uint8_t>(textBuffer_[offset]);
+                if (b < 0x80) {
+                    cp = b;
+                } else if ((b & 0xE0) == 0xC0) {
+                    cp = b & 0x1F;
+                    for (int i = 1; i < charLen; i++)
+                        cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
+                } else if ((b & 0xF0) == 0xE0) {
+                    cp = b & 0x0F;
+                    for (int i = 1; i < charLen; i++)
+                        cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
+                } else if ((b & 0xF8) == 0xF0) {
+                    cp = b & 0x07;
+                    for (int i = 1; i < charLen; i++)
+                        cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
                 }
 
-                textBuffer_[offset + charLen] = saved;
+                int charWidth = fontSize / 2; // fallback
+                font_scaled_glyph_t glyph;
+                if (font_engine_get_scaled_glyph(fe, cp, fontSize, &glyph)) {
+                    charWidth = glyph.advance_x;
+                    if (glyph.bitmap) {
+                        free(glyph.bitmap);
+                    }
+                }
 
                 if (lineWidth + charWidth > maxWidth && offset > lineStart) {
                     // 这行满了
@@ -415,13 +414,15 @@ void ReaderViewController::paginate() {
 void ReaderViewController::renderPage() {
     if (pages_.empty() || !contentLabel_) return;
 
-    const EpdFont* font = ui_font_get(prefs_.font_size);
-    if (!font) return;
+    font_engine_t* fe = app_.fontEngine();
+    uint8_t fontSize = prefs_.font_size;
+    if (fontSize == 0) fontSize = 24;
+    if (!fe) return;
 
     int maxWidth = contentAreaWidth_;
     int maxHeight = contentAreaHeight_;
     int lh = lineHeight_;
-    if (lh <= 0) lh = font->advance_y;
+    if (lh <= 0) lh = fontSize;
     int linesPerPage = maxHeight / lh;
     if (linesPerPage <= 0) linesPerPage = 1;
 
@@ -460,7 +461,7 @@ void ReaderViewController::renderPage() {
             int charLen = utf8CharLen(static_cast<uint8_t>(textBuffer_[pos]));
             if (pos + charLen > end) break;
 
-            // 测量字符宽度
+            // 解码 codepoint
             uint32_t cp = 0;
             uint8_t b = static_cast<uint8_t>(textBuffer_[pos]);
             if (b < 0x80) {
@@ -479,8 +480,14 @@ void ReaderViewController::renderPage() {
                     cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[pos + i]) & 0x3F);
             }
 
-            const EpdGlyph* glyph = epd_get_glyph(font, cp);
-            int charWidth = glyph ? glyph->advance_x : font->advance_y / 2;
+            int charWidth = fontSize / 2; // fallback
+            font_scaled_glyph_t glyph;
+            if (font_engine_get_scaled_glyph(fe, cp, fontSize, &glyph)) {
+                charWidth = glyph.advance_x;
+                if (glyph.bitmap) {
+                    free(glyph.bitmap);
+                }
+            }
 
             if (lineWidth + charWidth > maxWidth && pos > lineStart) {
                 break;

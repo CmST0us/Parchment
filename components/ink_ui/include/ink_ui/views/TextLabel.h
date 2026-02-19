@@ -10,6 +10,10 @@
 #include "ink_ui/core/Canvas.h"
 #include "ink_ui/core/View.h"
 
+extern "C" {
+struct font_engine_t;
+}
+
 namespace ink {
 
 /// TextLabel: 显示单行或多行文字
@@ -23,8 +27,8 @@ public:
     /// 设置文字内容（相同文字不触发重绘）
     void setText(const std::string& text);
 
-    /// 设置字体
-    void setFont(const EpdFont* font);
+    /// 设置字体引擎和字号
+    void setFont(font_engine_t* engine, uint8_t fontSize);
 
     /// 设置文字颜色
     void setColor(uint8_t color);
@@ -38,7 +42,8 @@ public:
     // ── Getters ──
 
     const std::string& text() const { return text_; }
-    const EpdFont* font() const { return font_; }
+    font_engine_t* fontEngine() const { return engine_; }
+    uint8_t fontSize() const { return fontSize_; }
     uint8_t color() const { return color_; }
     Align alignment() const { return alignment_; }
     int maxLines() const { return maxLines_; }
@@ -50,10 +55,14 @@ public:
 
 private:
     std::string text_;
-    const EpdFont* font_ = nullptr;
+    font_engine_t* engine_ = nullptr;
+    uint8_t fontSize_ = 0;
     uint8_t color_ = Color::Black;
     Align alignment_ = Align::Start;
     int maxLines_ = 1;
+
+    /// 获取缩放后的 ascender
+    int scaledAscender() const;
 };
 
 } // namespace ink

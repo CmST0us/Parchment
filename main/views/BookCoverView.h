@@ -11,7 +11,7 @@
 #include "ink_ui/core/View.h"
 
 extern "C" {
-#include "epdiy.h"
+struct font_engine_t;
 }
 
 /// 书籍封面缩略图视图
@@ -22,15 +22,16 @@ public:
     /// 设置格式标签（如 "TXT"）
     void setFormatTag(const std::string& tag);
 
-    /// 设置绘制文字的字体
-    void setFont(const EpdFont* font);
+    /// 设置字体引擎和字号
+    void setFont(font_engine_t* engine, uint8_t fontSize);
 
     void onDraw(ink::Canvas& canvas) override;
     ink::Size intrinsicSize() const override;
 
 private:
     std::string formatTag_ = "TXT";
-    const EpdFont* font_ = nullptr;
+    font_engine_t* engine_ = nullptr;
+    uint8_t fontSize_ = 0;
 
     static constexpr int kCoverWidth = 52;
     static constexpr int kCoverHeight = 72;

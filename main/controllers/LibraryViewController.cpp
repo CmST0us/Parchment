@@ -15,7 +15,6 @@ extern "C" {
 #include "esp_log.h"
 #include "book_store.h"
 #include "settings_store.h"
-#include "ui_font.h"
 #include "ui_icon.h"
 }
 
@@ -43,9 +42,7 @@ LibraryViewController::LibraryViewController(ink::Application& app)
 void LibraryViewController::viewDidLoad() {
     ESP_LOGI(TAG, "viewDidLoad");
 
-    const EpdFont* fontLarge = ui_font_get(28);
-    const EpdFont* fontMedium = ui_font_get(20);
-    const EpdFont* fontSmall = ui_font_get(16);
+    font_engine_t* fe = app_.fontEngine();
 
     // 根 View: FlexBox Column（由 contentArea_ 约束尺寸）
     view_ = std::make_unique<ink::View>();
@@ -55,7 +52,7 @@ void LibraryViewController::viewDidLoad() {
 
     // ── HeaderView: 汉堡菜单 + "Parchment" + 设置图标 ──
     auto header = std::make_unique<ink::HeaderView>();
-    header->setFont(fontLarge);
+    header->setFont(fe, 28);
     header->setTitle("Parchment");
     header->setLeftIcon(UI_ICON_MENU.data, []() {
         ESP_LOGI("LibraryVC", "Menu tapped (not implemented)");
@@ -90,7 +87,7 @@ void LibraryViewController::viewDidLoad() {
 
     // "共 N 本" 文字
     auto countLabel = std::make_unique<ink::TextLabel>();
-    countLabel->setFont(fontSmall);
+    countLabel->setFont(fe, 16);
     countLabel->setColor(ink::Color::Dark);
     countLabel->flexGrow_ = 1;
     subtitleLabel_ = countLabel.get();
@@ -98,7 +95,7 @@ void LibraryViewController::viewDidLoad() {
 
     // "按名称排序" 文字
     auto sortLabel = std::make_unique<ink::TextLabel>();
-    sortLabel->setFont(fontSmall);
+    sortLabel->setFont(fe, 16);
     sortLabel->setText("按名称排序");
     sortLabel->setColor(ink::Color::Dark);
     sortLabel->setAlignment(ink::Align::End);
@@ -128,7 +125,7 @@ void LibraryViewController::viewDidLoad() {
 
     // ── PageIndicatorView ──
     auto pageInd = std::make_unique<ink::PageIndicatorView>();
-    pageInd->setFont(fontSmall);
+    pageInd->setFont(fe, 16);
     pageInd->setPage(0, 1);
     pageInd->setOnPageChange([this](int page) {
         goToPage(page);
@@ -165,8 +162,7 @@ void LibraryViewController::handleEvent(const ink::Event& event) {
 void LibraryViewController::buildPage() {
     if (!listContainer_) return;
 
-    const EpdFont* fontMedium = ui_font_get(20);
-    const EpdFont* fontSmall = ui_font_get(16);
+    font_engine_t* fe = app_.fontEngine();
     size_t bookCount = book_store_get_count();
 
     listContainer_->clearSubviews();
@@ -174,7 +170,7 @@ void LibraryViewController::buildPage() {
     // ── 空列表状态 ──
     if (bookCount == 0) {
         auto emptyMsg = std::make_unique<ink::TextLabel>();
-        emptyMsg->setFont(fontMedium);
+        emptyMsg->setFont(fe, 20);
         emptyMsg->setText("未找到书籍");
         emptyMsg->setColor(ink::Color::Medium);
         emptyMsg->setAlignment(ink::Align::Center);
@@ -213,7 +209,7 @@ void LibraryViewController::buildPage() {
 
         // ── 左侧: 封面缩略图 (52×72px) ──
         auto cover = std::make_unique<BookCoverView>();
-        cover->setFont(fontSmall);
+        cover->setFont(fe, 16);
         cover->setFormatTag("TXT");
         cover->flexBasis_ = 52;
         item->addSubview(std::move(cover));
@@ -236,7 +232,7 @@ void LibraryViewController::buildPage() {
         }
 
         auto nameLabel = std::make_unique<ink::TextLabel>();
-        nameLabel->setFont(fontMedium);
+        nameLabel->setFont(fe, 20);
         nameLabel->setText(bookName);
         nameLabel->setColor(ink::Color::Black);
         nameLabel->flexBasis_ = 28;
@@ -256,7 +252,7 @@ void LibraryViewController::buildPage() {
         }
 
         auto sizeLabel = std::make_unique<ink::TextLabel>();
-        sizeLabel->setFont(fontSmall);
+        sizeLabel->setFont(fe, 16);
         sizeLabel->setText(sizeStr);
         sizeLabel->setColor(ink::Color::Dark);
         sizeLabel->flexBasis_ = 20;
@@ -289,7 +285,7 @@ void LibraryViewController::buildPage() {
         char pctStr[8];
         snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
         auto pctLabel = std::make_unique<ink::TextLabel>();
-        pctLabel->setFont(fontSmall);
+        pctLabel->setFont(fe, 16);
         pctLabel->setText(pctStr);
         pctLabel->setColor(ink::Color::Medium);
         pctLabel->flexBasis_ = 40;

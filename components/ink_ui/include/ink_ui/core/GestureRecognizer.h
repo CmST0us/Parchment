@@ -1,8 +1,8 @@
 /**
  * @file GestureRecognizer.h
- * @brief 触摸手势识别器 — 从 GT911 原始数据识别 Tap / LongPress / Swipe。
+ * @brief 触摸手势识别器 — 通过 M5.Touch 识别 Tap / LongPress / Swipe。
  *
- * 运行在独立 FreeRTOS 任务中，通过 GT911 中断/轮询读取触摸数据，
+ * 运行在独立 FreeRTOS 任务中，通过 M5.Touch.getDetail() 轮询触摸数据，
  * 识别手势后发送 Event 到 Application 的事件队列。
  */
 
@@ -13,13 +13,12 @@
 extern "C" {
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
-#include "freertos/semphr.h"
 #include "freertos/task.h"
 }
 
 namespace ink {
 
-/// 触摸手势识别器
+/// 触摸手势识别器 (M5.Touch 后端)
 class GestureRecognizer {
 public:
     /// 构造，绑定事件队列
@@ -38,7 +37,6 @@ public:
 
 private:
     QueueHandle_t eventQueue_;
-    SemaphoreHandle_t touchSem_ = nullptr;
     TaskHandle_t taskHandle_ = nullptr;
     volatile bool running_ = false;
 
@@ -51,7 +49,6 @@ private:
     static constexpr int kPollIntervalMs   = 20;    // ms
     static constexpr int kTaskStackSize    = 4096;
     static constexpr int kTaskPriority     = 6;
-    static constexpr int kIntGpio          = 48;    // GT911 INT
 
     // ── 手势状态 ──
     enum class GestureState {
@@ -70,9 +67,6 @@ private:
     /// 发送事件到队列
     void sendEvent(const Event& event);
 
-    /// 坐标映射（GT911 直通，裁剪到有效范围）
-    static void mapCoords(uint16_t tx, uint16_t ty, int& sx, int& sy);
-
     /// 距离的平方
     static int distanceSq(int x0, int y0, int x1, int y1);
 
@@ -86,9 +80,6 @@ private:
 
     /// 触摸任务主循环
     void taskLoop();
-
-    /// GPIO 中断处理（IRAM）
-    static void IRAM_ATTR isrHandler(void* arg);
 };
 
 } // namespace ink

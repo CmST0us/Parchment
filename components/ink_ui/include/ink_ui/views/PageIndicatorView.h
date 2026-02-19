@@ -12,6 +12,10 @@
 #include "ink_ui/views/ButtonView.h"
 #include "ink_ui/views/TextLabel.h"
 
+extern "C" {
+struct font_engine_t;
+}
+
 namespace ink {
 
 /// PageIndicatorView: 翻页指示器（"< 2/5 >"）
@@ -23,8 +27,8 @@ public:
     /// 设置当前页码和总页数
     void setPage(int page, int total);
 
-    /// 设置字体
-    void setFont(const EpdFont* font);
+    /// 设置字体引擎和字号
+    void setFont(font_engine_t* engine, uint8_t fontSize);
 
     /// 设置页码变化回调
     void setOnPageChange(std::function<void(int)> callback);
