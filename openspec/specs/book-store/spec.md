@@ -15,6 +15,7 @@ SD 卡 TXT 文件扫描、书籍列表构建与排序。提供 `book_store` API 
 - **WHEN** 调用 `book_store_scan()` 且 SD 卡已挂载
 - **THEN** SHALL 返回 `ESP_OK`
 - **AND** 书籍列表 SHALL 包含 `/sdcard` 根目录下所有 `.txt` 扩展名的文件
+- **AND** SHALL 跳过以 `.` 开头的隐藏文件
 - **AND** 每个书籍条目 SHALL 包含：文件名、完整路径、文件大小（字节）
 
 #### Scenario: SD 卡已挂载但无 TXT 文件

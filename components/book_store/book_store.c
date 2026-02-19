@@ -68,6 +68,11 @@ esp_err_t book_store_scan(void) {
             ESP_LOGI(TAG, "  -> skipped (directory)");
             continue;
         }
+        /* 跳过隐藏文件 */
+        if (entry->d_name[0] == '.') {
+            ESP_LOGI(TAG, "  -> skipped (hidden)");
+            continue;
+        }
         if (!is_txt_file(entry->d_name)) {
             ESP_LOGI(TAG, "  -> skipped (not .txt)");
             continue;
