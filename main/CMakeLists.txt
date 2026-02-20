@@ -5,6 +5,7 @@ idf_component_register(
          "controllers/ReaderViewController.cpp"
          "views/BootLogoView.cpp"
          "views/BookCoverView.cpp"
+         "views/ReaderContentView.cpp"
     INCLUDE_DIRS "." "pages"
     PRIV_REQUIRES "epd_driver" "gt911" "sd_storage" "settings_store" "ui_core" "ink_ui" "book_store" "text_encoding"
 )

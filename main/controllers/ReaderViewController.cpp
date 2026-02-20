@@ -1,9 +1,11 @@
 /**
  * @file ReaderViewController.cpp
- * @brief 阅读控制器实现 — TXT 文本分页、翻页交互、进度保存。
+ * @brief 阅读控制器实现 — 文件加载、翻页交互、进度保存。
+ *        文本分页和渲染由 ReaderContentView 负责。
  */
 
 #include "controllers/ReaderViewController.h"
+#include "views/ReaderContentView.h"
 
 #include <cstdio>
 #include <cstring>
@@ -77,12 +79,8 @@ void ReaderViewController::viewDidLoad() {
     if (!fontReading) fontReading = fontSmall;
 
     int margin = prefs_.margin;
-    lineHeight_ = fontReading->advance_y * prefs_.line_spacing / 10;
-    if (lineHeight_ < fontReading->advance_y) {
-        lineHeight_ = fontReading->advance_y;
-    }
 
-    // 根 View（由 contentArea_ 约束尺寸）
+    // 根 View
     view_ = std::make_unique<ink::View>();
     view_->setBackgroundColor(ink::Color::White);
     view_->flexStyle_.direction = ink::FlexDirection::Column;
@@ -128,14 +126,15 @@ void ReaderViewController::viewDidLoad() {
     touchView->onTapLeft_ = [this]() { prevPage(); };
     touchView->onTapRight_ = [this]() { nextPage(); };
 
-    // 内容文本 TextLabel（多行）
-    auto content = std::make_unique<ink::TextLabel>();
+    // ReaderContentView（文本渲染）
+    auto content = std::make_unique<ReaderContentView>();
     content->setFont(fontReading);
-    content->setColor(ink::Color::Black);
-    content->setMaxLines(0); // 不限制行数
-    content->setAlignment(ink::Align::Start);
+    content->setLineSpacing(prefs_.line_spacing);
+    content->setParagraphSpacing(prefs_.paragraph_spacing);
+    content->setTextColor(ink::Color::Black);
+    content->onPaginationComplete = [this]() { updateFooter(); };
     content->flexGrow_ = 1;
-    contentLabel_ = content.get();
+    contentView_ = content.get();
     touchView->addSubview(std::move(content));
 
     view_->addSubview(std::move(touchView));
@@ -168,45 +167,40 @@ void ReaderViewController::viewDidLoad() {
 
     // 加载文件
     if (!loadFile()) {
-        if (contentLabel_) {
-            contentLabel_->setText("Failed to load file");
-            contentLabel_->setColor(ink::Color::Medium);
-            contentLabel_->setAlignment(ink::Align::Center);
+        // 文件加载失败时，用 headerLabel 显示错误
+        if (headerLabel_) {
+            headerLabel_->setText("Failed to load file");
+            headerLabel_->setColor(ink::Color::Medium);
         }
         return;
     }
 
-    // 计算布局参数
-    // VC 可用高度 = 屏幕高度 - 状态栏(20px)
-    int vcHeight = ink::kScreenHeight - 20;
-    contentAreaWidth_ = ink::kScreenWidth - 2 * margin;
-    // 可用内容高度：VC高度 - header(48) - headerLabel(24) - footer(32) - padding
-    contentAreaHeight_ = vcHeight - 48 - 24 - 32 - 16;
-
-    // 分页
-    paginate();
+    // 设置文本到 ReaderContentView（懒分页将在首次 onDraw 时执行）
+    contentView_->setTextBuffer(textBuffer_, textSize_);
 
     // 恢复阅读进度
     reading_progress_t progress = {};
     settings_store_load_progress(book_.path, &progress);
-    if (progress.current_page > 0 && progress.current_page < static_cast<uint32_t>(pages_.size())) {
-        currentPage_ = static_cast<int>(progress.current_page);
+    if (progress.byte_offset > 0) {
+        contentView_->setInitialByteOffset(progress.byte_offset);
     }
 
-    // 渲染首页
-    renderPage();
+    // 设置页脚左侧书名
+    if (footerLeft_) {
+        footerLeft_->setText(bookDisplayName());
+    }
 }
 
 void ReaderViewController::viewWillDisappear() {
     ESP_LOGI(TAG, "viewWillDisappear — saving progress");
 
-    if (pages_.empty()) return;
+    if (!contentView_ || contentView_->totalPages() == 0) return;
 
     reading_progress_t progress = {};
-    progress.byte_offset = pages_[currentPage_];
+    progress.byte_offset = contentView_->currentPageOffset();
     progress.total_bytes = textSize_;
-    progress.current_page = static_cast<uint32_t>(currentPage_);
-    progress.total_pages = static_cast<uint32_t>(pages_.size());
+    progress.current_page = static_cast<uint32_t>(contentView_->currentPage());
+    progress.total_pages = static_cast<uint32_t>(contentView_->totalPages());
 
     settings_store_save_progress(book_.path, &progress);
 }
@@ -268,7 +262,6 @@ bool ReaderViewController::loadFile() {
     ESP_LOGI(TAG, "Detected encoding: %d", (int)enc);
 
     if (enc == TEXT_ENCODING_GBK) {
-        // GBK → UTF-8: 最坏情况 1.5 倍 + 1 (null terminator)
         size_t dst_cap = (size_t)textSize_ * 3 / 2 + 1;
         char* utf8Buf = static_cast<char*>(
             heap_caps_malloc(dst_cap + 1, MALLOC_CAP_SPIRAM));
@@ -295,7 +288,6 @@ bool ReaderViewController::loadFile() {
         textSize_ = static_cast<uint32_t>(out_len);
         ESP_LOGI(TAG, "Converted GBK→UTF-8: %lu bytes", (unsigned long)textSize_);
     } else if (enc == TEXT_ENCODING_UTF8_BOM) {
-        // 剥离 BOM: 跳过前 3 字节
         memmove(textBuffer_, textBuffer_ + 3, textSize_ - 3);
         textSize_ -= 3;
         ESP_LOGI(TAG, "Stripped UTF-8 BOM, size now %lu", (unsigned long)textSize_);
@@ -309,220 +301,13 @@ bool ReaderViewController::loadFile() {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  文本分页
-// ════════════════════════════════════════════════════════════════
-
-void ReaderViewController::paginate() {
-    pages_.clear();
-    if (!textBuffer_ || textSize_ == 0) return;
-
-    const EpdFont* font = ui_font_get(prefs_.font_size);
-    if (!font) return;
-
-    int maxWidth = contentAreaWidth_;
-    int maxHeight = contentAreaHeight_;
-    int lh = lineHeight_;
-    if (lh <= 0) lh = font->advance_y;
-
-    int linesPerPage = maxHeight / lh;
-    if (linesPerPage <= 0) linesPerPage = 1;
-
-    uint32_t offset = 0;
-    while (offset < textSize_) {
-        pages_.push_back(offset);
-
-        // 填充一页的行
-        for (int line = 0; line < linesPerPage && offset < textSize_; line++) {
-            // 处理换行符
-            if (textBuffer_[offset] == '\n') {
-                offset++;
-                continue;
-            }
-            if (textBuffer_[offset] == '\r') {
-                offset++;
-                if (offset < textSize_ && textBuffer_[offset] == '\n') {
-                    offset++;
-                }
-                continue;
-            }
-
-            // 一行：逐字符测量直到超出宽度
-            uint32_t lineStart = offset;
-            int lineWidth = 0;
-
-            while (offset < textSize_ &&
-                   textBuffer_[offset] != '\n' &&
-                   textBuffer_[offset] != '\r') {
-                int charLen = utf8CharLen(static_cast<uint8_t>(textBuffer_[offset]));
-                if (offset + charLen > textSize_) break;
-
-                // 测量这个字符的宽度
-                char saved = textBuffer_[offset + charLen];
-                textBuffer_[offset + charLen] = '\0';
-
-                // 测量从 lineStart 到 offset+charLen 的总宽度
-                // 为效率，只测量当前字符宽度
-                int charWidth = 0;
-                {
-                    // 解码 codepoint 获取 glyph advance
-                    uint32_t cp = 0;
-                    uint8_t b = static_cast<uint8_t>(textBuffer_[offset]);
-                    if (b < 0x80) {
-                        cp = b;
-                    } else if ((b & 0xE0) == 0xC0) {
-                        cp = b & 0x1F;
-                        for (int i = 1; i < charLen; i++)
-                            cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
-                    } else if ((b & 0xF0) == 0xE0) {
-                        cp = b & 0x0F;
-                        for (int i = 1; i < charLen; i++)
-                            cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
-                    } else if ((b & 0xF8) == 0xF0) {
-                        cp = b & 0x07;
-                        for (int i = 1; i < charLen; i++)
-                            cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[offset + i]) & 0x3F);
-                    }
-
-                    const EpdGlyph* glyph = epd_get_glyph(font, cp);
-                    charWidth = glyph ? glyph->advance_x : font->advance_y / 2;
-                }
-
-                textBuffer_[offset + charLen] = saved;
-
-                if (lineWidth + charWidth > maxWidth && offset > lineStart) {
-                    // 这行满了
-                    break;
-                }
-
-                lineWidth += charWidth;
-                offset += charLen;
-            }
-
-            // 如果一个字符都没装下（极端情况），至少前进一个字符
-            if (offset == lineStart && offset < textSize_) {
-                offset += utf8CharLen(static_cast<uint8_t>(textBuffer_[offset]));
-            }
-        }
-    }
-
-    ESP_LOGI(TAG, "Paginated: %zu pages", pages_.size());
-}
-
-// ════════════════════════════════════════════════════════════════
-//  页面渲染
-// ════════════════════════════════════════════════════════════════
-
-void ReaderViewController::renderPage() {
-    if (pages_.empty() || !contentLabel_) return;
-
-    const EpdFont* font = ui_font_get(prefs_.font_size);
-    if (!font) return;
-
-    int maxWidth = contentAreaWidth_;
-    int maxHeight = contentAreaHeight_;
-    int lh = lineHeight_;
-    if (lh <= 0) lh = font->advance_y;
-    int linesPerPage = maxHeight / lh;
-    if (linesPerPage <= 0) linesPerPage = 1;
-
-    // 提取当前页文本范围
-    uint32_t start = pages_[currentPage_];
-    uint32_t end = (currentPage_ + 1 < static_cast<int>(pages_.size()))
-                   ? pages_[currentPage_ + 1]
-                   : textSize_;
-
-    // 构建带 \n 的显示文本（将折行的文本转为换行符分隔）
-    std::string displayText;
-    displayText.reserve(end - start + linesPerPage);
-
-    uint32_t pos = start;
-    for (int line = 0; line < linesPerPage && pos < end; line++) {
-        if (line > 0) displayText += '\n';
-
-        // 跳过换行符
-        if (pos < end && textBuffer_[pos] == '\n') {
-            pos++;
-            continue;
-        }
-        if (pos < end && textBuffer_[pos] == '\r') {
-            pos++;
-            if (pos < end && textBuffer_[pos] == '\n') pos++;
-            continue;
-        }
-
-        // 一行文本
-        int lineWidth = 0;
-        uint32_t lineStart = pos;
-
-        while (pos < end &&
-               textBuffer_[pos] != '\n' &&
-               textBuffer_[pos] != '\r') {
-            int charLen = utf8CharLen(static_cast<uint8_t>(textBuffer_[pos]));
-            if (pos + charLen > end) break;
-
-            // 测量字符宽度
-            uint32_t cp = 0;
-            uint8_t b = static_cast<uint8_t>(textBuffer_[pos]);
-            if (b < 0x80) {
-                cp = b;
-            } else if ((b & 0xE0) == 0xC0) {
-                cp = b & 0x1F;
-                for (int i = 1; i < charLen; i++)
-                    cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[pos + i]) & 0x3F);
-            } else if ((b & 0xF0) == 0xE0) {
-                cp = b & 0x0F;
-                for (int i = 1; i < charLen; i++)
-                    cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[pos + i]) & 0x3F);
-            } else if ((b & 0xF8) == 0xF0) {
-                cp = b & 0x07;
-                for (int i = 1; i < charLen; i++)
-                    cp = (cp << 6) | (static_cast<uint8_t>(textBuffer_[pos + i]) & 0x3F);
-            }
-
-            const EpdGlyph* glyph = epd_get_glyph(font, cp);
-            int charWidth = glyph ? glyph->advance_x : font->advance_y / 2;
-
-            if (lineWidth + charWidth > maxWidth && pos > lineStart) {
-                break;
-            }
-
-            lineWidth += charWidth;
-            pos += charLen;
-        }
-
-        if (pos == lineStart && pos < end) {
-            pos += utf8CharLen(static_cast<uint8_t>(textBuffer_[pos]));
-        }
-
-        displayText.append(textBuffer_ + lineStart, pos - lineStart);
-    }
-
-    contentLabel_->setText(displayText);
-
-    // 更新页脚
-    int totalPages = static_cast<int>(pages_.size());
-    int percent = (totalPages > 0) ? ((currentPage_ + 1) * 100 / totalPages) : 0;
-
-    if (footerLeft_) {
-        footerLeft_->setText(bookDisplayName());
-    }
-
-    if (footerRight_) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%d/%d  %d%%",
-                 currentPage_ + 1, totalPages, percent);
-        footerRight_->setText(buf);
-    }
-}
-
-// ════════════════════════════════════════════════════════════════
 //  翻页
 // ════════════════════════════════════════════════════════════════
 
 void ReaderViewController::nextPage() {
-    if (currentPage_ + 1 >= static_cast<int>(pages_.size())) return;
+    if (!contentView_ || contentView_->currentPage() + 1 >= contentView_->totalPages()) return;
 
-    currentPage_++;
+    contentView_->setCurrentPage(contentView_->currentPage() + 1);
     pageFlipCount_++;
 
     // 残影管理
@@ -536,13 +321,13 @@ void ReaderViewController::nextPage() {
         if (view_) view_->setRefreshHint(ink::RefreshHint::Quality);
     }
 
-    renderPage();
+    updateFooter();
 }
 
 void ReaderViewController::prevPage() {
-    if (currentPage_ <= 0) return;
+    if (!contentView_ || contentView_->currentPage() <= 0) return;
 
-    currentPage_--;
+    contentView_->setCurrentPage(contentView_->currentPage() - 1);
     pageFlipCount_++;
 
     int refreshInterval = prefs_.full_refresh_pages;
@@ -555,7 +340,19 @@ void ReaderViewController::prevPage() {
         if (view_) view_->setRefreshHint(ink::RefreshHint::Quality);
     }
 
-    renderPage();
+    updateFooter();
+}
+
+void ReaderViewController::updateFooter() {
+    if (!contentView_ || !footerRight_) return;
+
+    int total = contentView_->totalPages();
+    int current = contentView_->currentPage();
+    int percent = (total > 0) ? ((current + 1) * 100 / total) : 0;
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%d/%d  %d%%", current + 1, total, percent);
+    footerRight_->setText(buf);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -569,12 +366,4 @@ std::string ReaderViewController::bookDisplayName() const {
         name = name.substr(0, pos);
     }
     return name;
-}
-
-int ReaderViewController::utf8CharLen(uint8_t byte) {
-    if (byte < 0x80) return 1;
-    if ((byte & 0xE0) == 0xC0) return 2;
-    if ((byte & 0xF0) == 0xE0) return 3;
-    if ((byte & 0xF8) == 0xF0) return 4;
-    return 1; // 无效字节，跳过 1 字节
 }

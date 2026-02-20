@@ -1,13 +1,13 @@
 /**
  * @file ReaderViewController.h
- * @brief 阅读控制器 — 加载 TXT 文件分页显示，支持翻页和进度保存。
+ * @brief 阅读控制器 — 加载 TXT 文件，通过 ReaderContentView 分页显示，支持翻页和进度保存。
  */
 
 #pragma once
 
-#include <vector>
-
 #include "ink_ui/InkUI.h"
+
+class ReaderContentView;
 
 extern "C" {
 #include "book_store.h"
@@ -33,31 +33,17 @@ private:
     char* textBuffer_ = nullptr;
     uint32_t textSize_ = 0;
 
-    // 分页表: pages_[i] = 第 i 页的起始字节偏移
-    std::vector<uint32_t> pages_;
-    int currentPage_ = 0;
+    // 翻页残影管理
     int pageFlipCount_ = 0;
 
     // UI 元素指针（非拥有）
-    ink::TextLabel* contentLabel_ = nullptr;
+    ReaderContentView* contentView_ = nullptr;
     ink::TextLabel* headerLabel_ = nullptr;
     ink::TextLabel* footerLeft_ = nullptr;
     ink::TextLabel* footerRight_ = nullptr;
 
-    // 布局参数
-    int contentAreaTop_ = 0;
-    int contentAreaHeight_ = 0;
-    int contentAreaWidth_ = 0;
-    int lineHeight_ = 0;
-
     /// 加载文件到内存
     bool loadFile();
-
-    /// 计算分页表
-    void paginate();
-
-    /// 渲染指定页面
-    void renderPage();
 
     /// 翻到下一页
     void nextPage();
@@ -65,9 +51,9 @@ private:
     /// 翻到上一页
     void prevPage();
 
+    /// 更新页脚文本
+    void updateFooter();
+
     /// 获取书名（不含 .txt 后缀）
     std::string bookDisplayName() const;
-
-    /// 计算 UTF-8 字符字节长度
-    static int utf8CharLen(uint8_t byte);
 };
