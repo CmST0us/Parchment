@@ -38,7 +38,7 @@ private:
 
     // UI 元素指针（非拥有）
     ReaderContentView* contentView_ = nullptr;
-    ink::TextLabel* headerLabel_ = nullptr;
+    ink::HeaderView* headerView_ = nullptr;
     ink::TextLabel* footerLeft_ = nullptr;
     ink::TextLabel* footerRight_ = nullptr;
 

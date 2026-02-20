@@ -29,17 +29,22 @@ class ReaderTouchView : public ink::View {
 public:
     std::function<void()> onTapLeft_;
     std::function<void()> onTapRight_;
+    std::function<void()> onTapMiddle_;
 
     bool onTouchEvent(const ink::TouchEvent& event) override {
         if (event.type == ink::TouchType::Tap) {
             int x = event.x - screenFrame().x;
             int w = frame().w;
+            ESP_LOGI("ReaderTouch", "Tap x=%d (local), w=%d, zone=%s",
+                     x, w,
+                     (x < w / 3) ? "left" : (x > w * 2 / 3) ? "right" : "middle");
             if (x < w / 3) {
                 if (onTapLeft_) onTapLeft_();
             } else if (x > w * 2 / 3) {
                 if (onTapRight_) onTapRight_();
+            } else {
+                if (onTapMiddle_) onTapMiddle_();
             }
-            // 中间 1/3 暂不处理（未来工具栏）
             return true;
         }
         return false;
@@ -95,25 +100,8 @@ void ReaderViewController::viewDidLoad() {
         app_.navigator().pop();
     });
     header->flexBasis_ = 48;
+    headerView_ = header.get();
     view_->addSubview(std::move(header));
-
-    // 顶部文件名标示
-    auto headerLbl = std::make_unique<ink::TextLabel>();
-    headerLbl->setFont(fontSmall);
-    headerLbl->setText(bookDisplayName());
-    headerLbl->setColor(ink::Color::Dark);
-    headerLbl->flexBasis_ = 24;
-    headerLabel_ = headerLbl.get();
-
-    auto headerContainer = std::make_unique<ink::View>();
-    headerContainer->flexBasis_ = 24;
-    headerContainer->setBackgroundColor(ink::Color::White);
-    headerContainer->flexStyle_.direction = ink::FlexDirection::Column;
-    headerContainer->flexStyle_.padding = ink::Insets{2, static_cast<int>(margin), 2, static_cast<int>(margin)};
-    headerContainer->flexStyle_.alignItems = ink::Align::Stretch;
-    headerLbl->flexGrow_ = 1;
-    headerContainer->addSubview(std::move(headerLbl));
-    view_->addSubview(std::move(headerContainer));
 
     // 文本内容区域（触摸三分区）
     auto touchView = std::make_unique<ReaderTouchView>();
@@ -125,6 +113,17 @@ void ReaderViewController::viewDidLoad() {
 
     touchView->onTapLeft_ = [this]() { prevPage(); };
     touchView->onTapRight_ = [this]() { nextPage(); };
+    touchView->onTapMiddle_ = [this]() {
+        if (headerView_) {
+            bool show = headerView_->isHidden();
+            headerView_->setHidden(!show);
+            ESP_LOGI(TAG, "Header toggled: %s", show ? "visible" : "hidden");
+            // view_ 已被 Application::takeView() 移走，通过 parent 链触发重新布局
+            if (auto* root = headerView_->parent()) {
+                root->setNeedsLayout();
+            }
+        }
+    };
 
     // ReaderContentView（文本渲染）
     auto content = std::make_unique<ReaderContentView>();
@@ -165,13 +164,15 @@ void ReaderViewController::viewDidLoad() {
 
     view_->addSubview(std::move(footer));
 
+    // Header 默认隐藏，点击中间区域切换
+    if (headerView_) {
+        headerView_->setHidden(true);
+        ESP_LOGI(TAG, "Header initially hidden");
+    }
+
     // 加载文件
     if (!loadFile()) {
-        // 文件加载失败时，用 headerLabel 显示错误
-        if (headerLabel_) {
-            headerLabel_->setText("Failed to load file");
-            headerLabel_->setColor(ink::Color::Medium);
-        }
+        ESP_LOGE(TAG, "Failed to load file: %s", book_.path);
         return;
     }
 

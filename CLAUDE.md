@@ -89,6 +89,7 @@ idf.py flash monitor
 - 渲染: 脏区域追踪 + 统一 GL16 局部刷新
 - 手势: GestureRecognizer 触摸手势识别
 - 所有权: unique_ptr 为主, parent 用 raw pointer
+- **VC View 所有权**: `ViewController::view_` 在挂载后被 `Application::takeView()` move 走变为 nullptr。VC 回调中不能用 `view_` 访问根 View，应通过子 View 的 `parent()` 链回溯
 - 页面导航: ViewController + NavigationController (页面栈)
 - 窗口: Application 管理 Window, 含持久 StatusBar
 - 入口: `app_main()` → `ink::Application::init()` + `app.run()` 事件循环
