@@ -7,13 +7,22 @@
 
 namespace ink {
 
-View* ViewController::getView() {
+void ViewController::loadView() {
+    view_ = std::make_unique<View>();
+}
+
+View* ViewController::view() {
     if (!viewLoaded_) {
-        viewDidLoad();
-        viewLoaded_ = true;
+        loadView();
         viewRawPtr_ = view_.get();
+        viewLoaded_ = true;
+        viewDidLoad();
     }
     return viewRawPtr_;
+}
+
+View* ViewController::getView() {
+    return view();
 }
 
 std::unique_ptr<View> ViewController::takeView() {

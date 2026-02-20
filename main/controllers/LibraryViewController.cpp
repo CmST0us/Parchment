@@ -40,11 +40,10 @@ LibraryViewController::LibraryViewController(ink::Application& app)
     title_ = "Parchment";
 }
 
-void LibraryViewController::viewDidLoad() {
-    ESP_LOGI(TAG, "viewDidLoad");
+void LibraryViewController::loadView() {
+    ESP_LOGI(TAG, "loadView");
 
     const EpdFont* fontLarge = ui_font_get(28);
-    const EpdFont* fontMedium = ui_font_get(20);
     const EpdFont* fontSmall = ui_font_get(16);
 
     // 根 View: FlexBox Column（由 contentArea_ 约束尺寸）
@@ -136,6 +135,10 @@ void LibraryViewController::viewDidLoad() {
     pageInd->flexBasis_ = 48;
     pageIndicator_ = pageInd.get();
     view_->addSubview(std::move(pageInd));
+}
+
+void LibraryViewController::viewDidLoad() {
+    ESP_LOGI(TAG, "viewDidLoad");
 
     // ── 初始数据加载 ──
     updatePageInfo();

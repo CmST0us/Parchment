@@ -12,6 +12,7 @@ class BootViewController : public ink::ViewController {
 public:
     explicit BootViewController(ink::Application& app);
 
+    void loadView() override;
     void viewDidLoad() override;
     void viewDidAppear() override;
     void handleEvent(const ink::Event& event) override;

@@ -16,6 +16,7 @@ class LibraryViewController : public ink::ViewController {
 public:
     explicit LibraryViewController(ink::Application& app);
 
+    void loadView() override;
     void viewDidLoad() override;
     void viewWillAppear() override;
     void handleEvent(const ink::Event& event) override;

@@ -8,50 +8,42 @@
 - **THEN** title_ 为书名，持有文件路径和 Application 引用
 
 ### Requirement: ReaderViewController 文件加载
-ReaderViewController SHALL 在 `viewDidLoad()` 中从 SD 卡读取 TXT 文件全部内容到内存（PSRAM），**检测文件编码并转换为 UTF-8**，并从 `settings_store` 加载该书的阅读进度（byte_offset）。
+ReaderViewController SHALL 将 view 树创建和文件加载分离：
 
-加载流程 SHALL 按以下顺序执行：
-1. 以二进制模式读取文件全部内容到 PSRAM 缓冲区
-2. 调用 `text_encoding_detect()` 检测编码
-3. 若为 `TEXT_ENCODING_GBK`：分配新 PSRAM 缓冲区（容量为原始大小的 1.5 倍 + 1），调用 `text_encoding_gbk_to_utf8()` 转码，释放原缓冲区，替换为新缓冲区
-4. 若为 `TEXT_ENCODING_UTF8_BOM`：跳过前 3 字节（memmove），更新缓冲区大小
-5. 若为 `TEXT_ENCODING_UTF8`：不做额外处理
-6. 空终止缓冲区
+`loadView()` 中 SHALL 创建页面 View 树：
+1. 顶部 HeaderView：返回按钮 + 书名（默认隐藏）
+2. ReaderTouchView 容器（三分区触摸），内嵌 ReaderContentView
+3. 底部页脚：书名左侧，页码/百分比右侧
+
+`viewDidLoad()` 中 SHALL 执行数据加载：
+1. 从 SD 卡读取 TXT 文件全部内容到 PSRAM
+2. 检测文件编码并转换为 UTF-8
+3. 调用 `contentView_->setTextBuffer()` 设置文本缓冲区
+4. 从 `settings_store` 加载阅读进度并调用 `setInitialByteOffset()`
 
 #### Scenario: 文件加载成功（UTF-8）
-- **WHEN** viewDidLoad 执行，文件 /sdcard/book/三体.txt 存在且为 UTF-8 编码
-- **THEN** 文件内容加载到 PSRAM buffer，无需转码，阅读进度恢复到上次位置
-
-#### Scenario: 文件加载成功（GBK 自动转码）
-- **WHEN** viewDidLoad 执行，文件为 GBK 编码的中文 TXT
-- **THEN** 检测到 GBK 编码，自动转码为 UTF-8 存入 PSRAM buffer，后续分页和渲染正常显示中文
-
-#### Scenario: 文件加载成功（UTF-8 BOM 剥离）
-- **WHEN** viewDidLoad 执行，文件以 `EF BB BF` 开头
-- **THEN** BOM 被剥离，textBuffer_ 从实际文本内容开始，textSize_ 减少 3
+- **WHEN** loadView 创建 View 树后 viewDidLoad 执行，文件为 UTF-8 编码
+- **THEN** 文件内容加载到 PSRAM buffer，设置到 ReaderContentView，阅读进度恢复
 
 #### Scenario: 文件加载失败
 - **WHEN** viewDidLoad 执行，文件不存在或读取错误
 - **THEN** 显示错误提示 "Failed to load file"，不崩溃
 
-#### Scenario: GBK 转码内存分配失败
-- **WHEN** GBK 文件较大，PSRAM 无法分配转码缓冲区
-- **THEN** 释放原缓冲区，loadFile 返回 false，显示错误提示
-
 ### Requirement: ReaderViewController 文本分页
 ReaderViewController SHALL 将文本分页职责委托给 `ReaderContentView`。ViewController 不再维护内部分页表和折行逻辑。
 
 viewDidLoad 中 SHALL：
-1. 创建 `ReaderContentView` 实例并配置字体、行距、段间距、文字颜色
-2. 调用 `setTextBuffer()` 设置加载后的文本缓冲区
-3. 分页由 `ReaderContentView` 在首次 `onDraw` 时自动执行
+1. 调用 `setTextBuffer()` 设置加载后的文本缓冲区
+2. 分页由 `ReaderContentView` 在首次 `onDraw` 时自动执行
+
+`ReaderContentView` 实例在 `loadView()` 中创建并配置字体、行距、段间距、文字颜色。
 
 #### Scenario: 分页委托
 - **WHEN** viewDidLoad 执行，文件加载成功
-- **THEN** ReaderContentView 被创建并配置，文本缓冲区已设置，分页将在首次渲染时自动完成
+- **THEN** ReaderContentView 已在 loadView 中创建并配置，文本缓冲区已设置，分页将在首次渲染时自动完成
 
 ### Requirement: ReaderViewController 页面布局
-ReaderViewController SHALL 显示以下元素：
+ReaderViewController SHALL 在 `loadView()` 中创建以下元素：
 1. 顶部 HeaderView：返回按钮 + 书名（默认隐藏，通过 tap 中间区域切换）
 2. ReaderTouchView 容器（处理三分区触摸），内嵌 ReaderContentView（文本渲染）
 3. 底部页脚：书名 左侧，"currentPage/totalPages percent%" 右侧，小字体 DARK
@@ -59,8 +51,8 @@ ReaderViewController SHALL 显示以下元素：
 页脚的页码和百分比 SHALL 从 `ReaderContentView` 的 `totalPages()` 和 `currentPage()` 获取。
 
 #### Scenario: 阅读页面布局
-- **WHEN** 文本加载完成
-- **THEN** 屏幕显示文本内容（ReaderContentView 渲染）和底部页码信息，HeaderView 默认隐藏
+- **WHEN** loadView 执行
+- **THEN** View 树已创建（Header + TouchView/ContentView + Footer），等待 viewDidLoad 加载数据
 
 ### Requirement: ReaderViewController 翻页
 ReaderViewController SHALL 支持以下翻页操作：

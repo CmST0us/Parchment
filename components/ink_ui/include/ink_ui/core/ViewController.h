@@ -2,8 +2,9 @@
  * @file ViewController.h
  * @brief 页面控制器基类 — 管理 View 树的创建和生命周期。
  *
- * 子类必须 override viewDidLoad() 以创建 View 树。
- * getView() 首次调用时触发 viewDidLoad（懒加载）。
+ * 子类可 override loadView() 创建自定义 View 树，
+ * override viewDidLoad() 做加载后的额外配置。
+ * view() / getView() 首次调用时触发懒加载（loadView → viewDidLoad）。
  */
 
 #pragma once
@@ -28,8 +29,14 @@ public:
 
     // ── View 访问 ──
 
-    /// 获取根 View（首次调用触发 viewDidLoad）
+    /// 获取根 View（首次调用触发 loadView + viewDidLoad）
+    View* view();
+
+    /// 获取根 View（等价于 view()，保持向后兼容）
     View* getView();
+
+    /// 查询 view 是否已加载
+    bool isViewLoaded() const { return viewLoaded_; }
 
     /// 取出 View 所有权（用于挂载到 Window 树）
     std::unique_ptr<View> takeView();
@@ -39,8 +46,8 @@ public:
 
     // ── 生命周期回调（子类可选 override）──
 
-    /// 创建 View 树（纯虚函数，只调用一次）
-    virtual void viewDidLoad() = 0;
+    /// View 加载后的配置回调（子类可 override，默认空实现）
+    virtual void viewDidLoad() {}
 
     /// 即将变为可见
     virtual void viewWillAppear() {}
@@ -67,7 +74,10 @@ public:
     std::string title_;
 
 protected:
-    /// 根 View（子类在 viewDidLoad 中创建并赋值）
+    /// 创建 View 树（子类可 override，默认创建空白 View）
+    virtual void loadView();
+
+    /// 根 View（子类在 loadView 中创建并赋值）
     std::unique_ptr<View> view_;
 
 private:

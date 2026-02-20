@@ -20,6 +20,7 @@ public:
     ReaderViewController(ink::Application& app, const book_info_t& book);
     ~ReaderViewController() override;
 
+    void loadView() override;
     void viewDidLoad() override;
     void viewWillDisappear() override;
     void handleEvent(const ink::Event& event) override;

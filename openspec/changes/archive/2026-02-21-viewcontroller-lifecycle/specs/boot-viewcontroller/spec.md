@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: BootViewController 启动画面
 `BootViewController` SHALL 继承 `ink::ViewController`，在 `loadView()` 中创建启动画面 View 树。画面 SHALL 在 540x960 全屏范围内居中显示：
@@ -11,24 +11,6 @@
 #### Scenario: 启动画面布局
 - **WHEN** BootViewController 被 push 并首次调用 view()
 - **THEN** loadView 创建 View 树，从上到下包含: 弹性空间 → Logo(100px) → 间距(24px) → 标题 "Parchment"(28px, BLACK) → 副标题 "墨水屏阅读器"(20px, DARK) → 弹性空间 → 状态文字(16px, MEDIUM) → 间距(16px) → 进度条(200×3px) → 弹性空间(底部)
-
-### Requirement: BootViewController 构造函数
-`BootViewController` SHALL 通过构造函数接收 `ink::Application&` 引用，用于导航和延迟事件。title_ SHALL 设为 "Boot"。
-
-#### Scenario: 构造
-- **WHEN** 创建 `BootViewController(app)`
-- **THEN** title_ 为 "Boot"，持有 app 引用
-
-### Requirement: BootViewController 自动跳转
-`BootViewController` SHALL 在 `viewDidAppear()` 中通过 `Application::postDelayed()` 发送一个 2 秒延迟的 TimerEvent。在 `handleEvent()` 中接收到该 TimerEvent 时，SHALL 调用 `app.navigator().replace()` 将自身替换为 `LibraryViewController`。
-
-#### Scenario: 2 秒后自动跳转到书库
-- **WHEN** BootViewController 已可见，2 秒延迟到期
-- **THEN** TimerEvent 到达，handleEvent 中执行 navigator().replace(LibraryVC)，画面切换到书库页面
-
-#### Scenario: Boot 页面不保留在栈中
-- **WHEN** 跳转到 LibraryViewController 完成后
-- **THEN** BootViewController 已被 replace 销毁，navigator.depth() 保持为 1
 
 ### Requirement: BootViewController 初始化状态
 BootViewController SHALL 在 `viewDidLoad()` 中执行 `book_store_scan()` 扫描 SD 卡书籍。扫描完成后 SHALL 更新状态文字为 "发现 N 本书" 或在 SD 卡不可用时显示 "SD 卡不可用"。

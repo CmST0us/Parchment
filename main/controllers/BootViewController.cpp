@@ -24,8 +24,8 @@ BootViewController::BootViewController(ink::Application& app)
     title_ = "Boot";
 }
 
-void BootViewController::viewDidLoad() {
-    ESP_LOGI(TAG, "viewDidLoad");
+void BootViewController::loadView() {
+    ESP_LOGI(TAG, "loadView");
 
     const EpdFont* fontLarge = ui_font_get(28);
     const EpdFont* fontMedium = ui_font_get(20);
@@ -116,6 +116,10 @@ void BootViewController::viewDidLoad() {
     bottomSpacer->flexGrow_ = 1;
     bottomSpacer->setBackgroundColor(ink::Color::White);
     view_->addSubview(std::move(bottomSpacer));
+}
+
+void BootViewController::viewDidLoad() {
+    ESP_LOGI(TAG, "viewDidLoad");
 
     // ── 扫描 SD 卡书籍 ──
     esp_err_t err = book_store_scan();

@@ -73,10 +73,10 @@ ReaderViewController::~ReaderViewController() {
 //  生命周期
 // ════════════════════════════════════════════════════════════════
 
-void ReaderViewController::viewDidLoad() {
-    ESP_LOGI(TAG, "viewDidLoad — %s", book_.name);
+void ReaderViewController::loadView() {
+    ESP_LOGI(TAG, "loadView — %s", book_.name);
 
-    // 加载阅读偏好
+    // 加载阅读偏好（影响 view 树构建）
     settings_store_load_prefs(&prefs_);
 
     const EpdFont* fontSmall = ui_font_get(20);
@@ -118,7 +118,6 @@ void ReaderViewController::viewDidLoad() {
             bool show = headerView_->isHidden();
             headerView_->setHidden(!show);
             ESP_LOGI(TAG, "Header toggled: %s", show ? "visible" : "hidden");
-            // view_ 已被 Application::takeView() 移走，通过 parent 链触发重新布局
             if (auto* root = headerView_->parent()) {
                 root->setNeedsLayout();
             }
@@ -169,6 +168,10 @@ void ReaderViewController::viewDidLoad() {
         headerView_->setHidden(true);
         ESP_LOGI(TAG, "Header initially hidden");
     }
+}
+
+void ReaderViewController::viewDidLoad() {
+    ESP_LOGI(TAG, "viewDidLoad — %s", book_.name);
 
     // 加载文件
     if (!loadFile()) {
@@ -317,9 +320,9 @@ void ReaderViewController::nextPage() {
 
     if (pageFlipCount_ >= refreshInterval) {
         pageFlipCount_ = 0;
-        if (view_) view_->setRefreshHint(ink::RefreshHint::Full);
+        if (view()) view()->setRefreshHint(ink::RefreshHint::Full);
     } else {
-        if (view_) view_->setRefreshHint(ink::RefreshHint::Quality);
+        if (view()) view()->setRefreshHint(ink::RefreshHint::Quality);
     }
 
     updateFooter();
@@ -336,9 +339,9 @@ void ReaderViewController::prevPage() {
 
     if (pageFlipCount_ >= refreshInterval) {
         pageFlipCount_ = 0;
-        if (view_) view_->setRefreshHint(ink::RefreshHint::Full);
+        if (view()) view()->setRefreshHint(ink::RefreshHint::Full);
     } else {
-        if (view_) view_->setRefreshHint(ink::RefreshHint::Quality);
+        if (view()) view()->setRefreshHint(ink::RefreshHint::Quality);
     }
 
     updateFooter();
