@@ -45,7 +45,7 @@ uint8_t *epd_driver_get_framebuffer(void);
 /**
  * @brief 全屏刷新。
  *
- * 将帧缓冲区内容完整输出到屏幕（MODE_GC16）。
+ * 将帧缓冲区内容完整输出到屏幕（MODE_GL16）。
  *
  * @return ESP_OK 成功。
  */
@@ -100,6 +100,17 @@ void epd_driver_draw_pixel(int x, int y, uint8_t color);
  * @param color 灰度值，高 4 位有效。
  */
 void epd_driver_fill_rect(int x, int y, int w, int h, uint8_t color);
+
+/**
+ * @brief 两步刷新：先快速刷黑，再显示目标内容。
+ *
+ * 利用 MODE_DU 快速将屏幕刷黑，然后用 MODE_GL16 从纯黑状态
+ * 过渡到目标内容。由于起始状态为纯黑，GL16 的"先驱黑"阶段
+ * 不产生可见变化，消除闪烁感。
+ *
+ * @return ESP_OK 成功。
+ */
+esp_err_t epd_driver_update_screen_black_flash(void);
 
 /**
  * @brief 将帧缓冲区全部设为白色（不刷新屏幕）。

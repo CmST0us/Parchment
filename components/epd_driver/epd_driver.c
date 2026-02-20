@@ -6,6 +6,8 @@
 #include "epd_driver.h"
 #include "epdiy.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
+#include <string.h>
 
 static const char *TAG = "epd_driver";
 
@@ -124,6 +126,47 @@ void epd_driver_fill_rect(int x, int y, int w, int h, uint8_t color) {
         EpdRect rect = {.x = x, .y = y, .width = w, .height = h};
         epd_fill_rect(rect, color, s_framebuffer);
     }
+}
+
+esp_err_t epd_driver_update_screen_black_flash(void) {
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int fb_size = epd_width() / 2 * epd_height();
+
+    /* 保存目标帧内容 */
+    uint8_t *target = heap_caps_malloc(fb_size, MALLOC_CAP_SPIRAM);
+    if (target == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate temp buffer for black flash");
+        return ESP_ERR_NO_MEM;
+    }
+    memcpy(target, s_framebuffer, fb_size);
+
+    /* 第一步：MODE_DU 快速刷黑 */
+    memset(s_framebuffer, 0x00, fb_size);
+    epd_poweron();
+    enum EpdDrawError err = epd_hl_update_screen(&s_hl_state, MODE_DU, 25);
+    if (err != EPD_DRAW_SUCCESS) {
+        ESP_LOGE(TAG, "Black fill failed: %d", err);
+        memcpy(s_framebuffer, target, fb_size);
+        heap_caps_free(target);
+        epd_poweroff();
+        return ESP_FAIL;
+    }
+
+    /* 第二步：MODE_GL16 从纯黑状态显示目标内容 */
+    memcpy(s_framebuffer, target, fb_size);
+    err = epd_hl_update_screen(&s_hl_state, MODE_GL16, 25);
+    epd_poweroff();
+
+    heap_caps_free(target);
+
+    if (err != EPD_DRAW_SUCCESS) {
+        ESP_LOGE(TAG, "Target draw from black failed: %d", err);
+        return ESP_FAIL;
+    }
+    return ESP_OK;
 }
 
 void epd_driver_set_all_white(void) {
