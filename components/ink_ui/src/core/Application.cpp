@@ -12,6 +12,7 @@ extern "C" {
 #include "freertos/queue.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "battery.h"
 }
 
 #include <ctime>
@@ -161,7 +162,7 @@ void Application::run() {
             dispatchEvent(event);
         }
 
-        // 检查时间更新（分钟级粒度）
+        // 检查时间和电池更新
         if (statusBar_ && !statusBar_->isHidden()) {
             time_t now;
             time(&now);
@@ -170,6 +171,13 @@ void Application::run() {
             if (timeinfo.tm_min != lastMinute_) {
                 lastMinute_ = timeinfo.tm_min;
                 statusBar_->updateTime();
+            }
+
+            // 电池电量更新（≥30 秒间隔）
+            int64_t nowUs = esp_timer_get_time();
+            if (nowUs - lastBatteryUpdateUs_ >= kBatteryUpdateIntervalUs) {
+                lastBatteryUpdateUs_ = nowUs;
+                statusBar_->updateBattery(battery_get_percent());
             }
         }
 

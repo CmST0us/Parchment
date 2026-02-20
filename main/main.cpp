@@ -18,6 +18,7 @@ extern "C" {
 #include "gt911.h"
 #include "sd_storage.h"
 #include "settings_store.h"
+#include "battery.h"
 #include "ui_font.h"
 
 #include "ink_ui/InkUI.h"
@@ -34,17 +35,17 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "========================================");
 
     /* 0. NVS 初始化 */
-    ESP_LOGI(TAG, "[0/5] NVS init...");
+    ESP_LOGI(TAG, "[0/6] NVS init...");
     if (settings_store_init() != ESP_OK) {
         ESP_LOGW(TAG, "NVS init failed, settings unavailable");
     }
 
     /* 1. 板级初始化 */
-    ESP_LOGI(TAG, "[1/5] Board init...");
+    ESP_LOGI(TAG, "[1/6] Board init...");
     board_init();
 
     /* 2. GT911 触摸初始化 */
-    ESP_LOGI(TAG, "[2/5] Touch init...");
+    ESP_LOGI(TAG, "[2/6] Touch init...");
     gt911_config_t touch_cfg = {};
     touch_cfg.sda_gpio = BOARD_TOUCH_SDA;
     touch_cfg.scl_gpio = BOARD_TOUCH_SCL;
@@ -57,7 +58,7 @@ extern "C" void app_main(void) {
     }
 
     /* 3. SD 卡挂载 */
-    ESP_LOGI(TAG, "[3/5] SD card mount...");
+    ESP_LOGI(TAG, "[3/6] SD card mount...");
     sd_storage_config_t sd_cfg = {};
     sd_cfg.miso_gpio = BOARD_SD_MISO;
     sd_cfg.mosi_gpio = BOARD_SD_MOSI;
@@ -67,23 +68,30 @@ extern "C" void app_main(void) {
         ESP_LOGW(TAG, "SD card not available");
     }
 
-    /* 4. 字体子系统初始化 */
-    ESP_LOGI(TAG, "[4/5] Font init...");
+    /* 4. 电池 ADC 初始化 */
+    ESP_LOGI(TAG, "[4/6] Battery ADC init...");
+    if (battery_init() != ESP_OK) {
+        ESP_LOGW(TAG, "Battery ADC init failed, battery display unavailable");
+    }
+
+    /* 5. 字体子系统初始化 */
+    ESP_LOGI(TAG, "[5/6] Font init...");
     ui_font_init();
 
-    /* 5. InkUI Application 启动 */
-    ESP_LOGI(TAG, "[5/5] InkUI init...");
+    /* 6. InkUI Application 启动 */
+    ESP_LOGI(TAG, "[6/6] InkUI init...");
     if (!app.init()) {
         ESP_LOGE(TAG, "InkUI init failed!");
         return;
     }
 
-    // 设置状态栏字体
+    // 设置状态栏字体和初始电量
     if (app.statusBar()) {
         const EpdFont* smallFont = ui_font_get(16);
         if (smallFont) {
             app.statusBar()->setFont(smallFont);
         }
+        app.statusBar()->updateBattery(battery_get_percent());
     }
 
     // 推入启动画面

@@ -26,7 +26,7 @@ idf_component_register(
     SRCS ${INK_UI_SRCS}
     INCLUDE_DIRS "include"
     REQUIRES epd_driver epdiy gt911
-    PRIV_REQUIRES ui_core
+    PRIV_REQUIRES ui_core battery
 )
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)

@@ -55,12 +55,16 @@ private:
     View* contentArea_ = nullptr;              ///< 非拥有，windowRoot_ 子树中
     ViewController* mountedVC_ = nullptr;      ///< 当前挂载的 VC
     int lastMinute_ = -1;                      ///< 时间更新追踪
+    int64_t lastBatteryUpdateUs_ = 0;          ///< 上次电池更新时间 (µs)
 
     /// 事件队列超时（30 秒）
     static constexpr int kQueueTimeoutMs = 30000;
 
     /// 事件队列容量
     static constexpr int kEventQueueSize = 16;
+
+    /// 电池更新间隔 (30 秒, 单位 µs)
+    static constexpr int64_t kBatteryUpdateIntervalUs = 30 * 1000 * 1000LL;
 
     /// 构建 Window View 树（windowRoot_ + statusBar_ + contentArea_）
     void buildWindowTree();
