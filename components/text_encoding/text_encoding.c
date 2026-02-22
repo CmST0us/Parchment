@@ -59,9 +59,9 @@ text_encoding_t text_encoding_detect(const char* buf, size_t len) {
             return TEXT_ENCODING_GBK;
         }
 
-        /* 检查是否有足够的 continuation bytes */
+        /* 探测缓冲区末尾的不完整序列：视为截断而非非法 UTF-8 */
         if (i + seq_len > len) {
-            return TEXT_ENCODING_GBK;
+            break;
         }
 
         /* 验证 continuation bytes (0x80-0xBF) */
