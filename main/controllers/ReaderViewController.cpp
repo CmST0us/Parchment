@@ -1,6 +1,6 @@
 /**
  * @file ReaderViewController.cpp
- * @brief 阅读控制器实现 — 文件加载、翻页交互、进度保存。
+ * @brief 阅读控制器实现 — TextSource 流式加载、翻页交互、进度保存。
  *        文本分页和渲染由 ReaderContentView 负责。
  */
 
@@ -9,13 +9,13 @@
 
 #include <cstdio>
 #include <cstring>
+#include <sys/stat.h>
 
 extern "C" {
 #include "esp_log.h"
-#include "esp_heap_caps.h"
+#include "mbedtls/md5.h"
 #include "ui_font.h"
 #include "ui_icon.h"
-#include "text_encoding.h"
 }
 
 static const char* TAG = "ReaderVC";
@@ -63,10 +63,7 @@ ReaderViewController::ReaderViewController(ink::Application& app,
 }
 
 ReaderViewController::~ReaderViewController() {
-    if (textBuffer_) {
-        heap_caps_free(textBuffer_);
-        textBuffer_ = nullptr;
-    }
+    textSource_.close();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -130,7 +127,6 @@ void ReaderViewController::loadView() {
     content->setLineSpacing(prefs_.line_spacing);
     content->setParagraphSpacing(prefs_.paragraph_spacing);
     content->setTextColor(ink::Color::Black);
-    content->onPaginationComplete = [this]() { updateFooter(); };
     content->flexGrow_ = 1;
     contentView_ = content.get();
     touchView->addSubview(std::move(content));
@@ -173,14 +169,33 @@ void ReaderViewController::loadView() {
 void ReaderViewController::viewDidLoad() {
     ESP_LOGI(TAG, "viewDidLoad — %s", book_.name);
 
-    // 加载文件
-    if (!loadFile()) {
-        ESP_LOGE(TAG, "Failed to load file: %s", book_.path);
+    // 计算缓存目录路径
+    computeCacheDirPath();
+
+    // 创建缓存目录（先确保父目录存在）
+    mkdir("/sdcard/.cache", 0755);
+    mkdir(cacheDirPath_, 0755);
+
+    // 打开 TextSource
+    if (!textSource_.open(book_.path, cacheDirPath_)) {
+        ESP_LOGE(TAG, "Failed to open TextSource: %s", book_.path);
+        if (footerRight_) {
+            footerRight_->setText("Open failed");
+        }
         return;
     }
 
-    // 设置文本到 ReaderContentView（懒分页将在首次 onDraw 时执行）
-    contentView_->setTextBuffer(textBuffer_, textSize_);
+    // 设置文本源到 ReaderContentView
+    contentView_->setTextSource(&textSource_);
+    contentView_->setCacheDir(cacheDirPath_);
+
+    // 设置状态回调
+    contentView_->setStatusCallback([this]() {
+        updateFooter();
+        if (contentView_) {
+            contentView_->setNeedsDisplay();
+        }
+    });
 
     // 恢复阅读进度
     reading_progress_t progress = {};
@@ -193,18 +208,23 @@ void ReaderViewController::viewDidLoad() {
     if (footerLeft_) {
         footerLeft_->setText(bookDisplayName());
     }
+
+    // 初始页脚状态
+    updateFooter();
 }
 
 void ReaderViewController::viewWillDisappear() {
     ESP_LOGI(TAG, "viewWillDisappear — saving progress");
 
-    if (!contentView_ || contentView_->totalPages() == 0) return;
+    if (!contentView_) return;
 
     reading_progress_t progress = {};
     progress.byte_offset = contentView_->currentPageOffset();
-    progress.total_bytes = textSize_;
+    progress.total_bytes = textSource_.totalSize();
     progress.current_page = static_cast<uint32_t>(contentView_->currentPage());
-    progress.total_pages = static_cast<uint32_t>(contentView_->totalPages());
+    progress.total_pages = contentView_->isPageIndexComplete()
+                               ? static_cast<uint32_t>(contentView_->totalPages())
+                               : 0;
 
     settings_store_save_progress(book_.path, &progress);
 }
@@ -220,88 +240,26 @@ void ReaderViewController::handleEvent(const ink::Event& event) {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  文件加载
+//  缓存目录路径
 // ════════════════════════════════════════════════════════════════
 
-bool ReaderViewController::loadFile() {
-    FILE* f = fopen(book_.path, "rb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open file: %s", book_.path);
-        return false;
+void ReaderViewController::computeCacheDirPath() {
+    uint8_t hash[16];
+    mbedtls_md5_context ctx;
+    mbedtls_md5_init(&ctx);
+    mbedtls_md5_starts(&ctx);
+    mbedtls_md5_update(&ctx, reinterpret_cast<const uint8_t*>(book_.path),
+                       strlen(book_.path));
+    mbedtls_md5_finish(&ctx, hash);
+    mbedtls_md5_free(&ctx);
+
+    char hexStr[33];
+    for (int i = 0; i < 16; i++) {
+        snprintf(hexStr + i * 2, 3, "%02x", hash[i]);
     }
 
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (fsize <= 0 || fsize > 8 * 1024 * 1024) {
-        ESP_LOGE(TAG, "File size invalid or too large: %ld", fsize);
-        fclose(f);
-        return false;
-    }
-
-    textSize_ = static_cast<uint32_t>(fsize);
-    textBuffer_ = static_cast<char*>(
-        heap_caps_malloc(textSize_ + 1, MALLOC_CAP_SPIRAM));
-
-    if (!textBuffer_) {
-        ESP_LOGE(TAG, "Failed to allocate %lu bytes in PSRAM",
-                 (unsigned long)textSize_);
-        fclose(f);
-        return false;
-    }
-
-    size_t read = fread(textBuffer_, 1, textSize_, f);
-    fclose(f);
-
-    if (read != textSize_) {
-        ESP_LOGE(TAG, "Read mismatch: %zu / %lu", read, (unsigned long)textSize_);
-        heap_caps_free(textBuffer_);
-        textBuffer_ = nullptr;
-        return false;
-    }
-
-    // 编码检测与转码
-    text_encoding_t enc = text_encoding_detect(textBuffer_, textSize_);
-    ESP_LOGI(TAG, "Detected encoding: %d", (int)enc);
-
-    if (enc == TEXT_ENCODING_GBK) {
-        size_t dst_cap = (size_t)textSize_ * 3 / 2 + 1;
-        char* utf8Buf = static_cast<char*>(
-            heap_caps_malloc(dst_cap + 1, MALLOC_CAP_SPIRAM));
-        if (!utf8Buf) {
-            ESP_LOGE(TAG, "Failed to allocate %zu bytes for GBK→UTF-8", dst_cap);
-            heap_caps_free(textBuffer_);
-            textBuffer_ = nullptr;
-            return false;
-        }
-
-        size_t out_len = dst_cap;
-        esp_err_t err = text_encoding_gbk_to_utf8(textBuffer_, textSize_,
-                                                    utf8Buf, &out_len);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "GBK→UTF-8 conversion failed");
-            heap_caps_free(utf8Buf);
-            heap_caps_free(textBuffer_);
-            textBuffer_ = nullptr;
-            return false;
-        }
-
-        heap_caps_free(textBuffer_);
-        textBuffer_ = utf8Buf;
-        textSize_ = static_cast<uint32_t>(out_len);
-        ESP_LOGI(TAG, "Converted GBK→UTF-8: %lu bytes", (unsigned long)textSize_);
-    } else if (enc == TEXT_ENCODING_UTF8_BOM) {
-        memmove(textBuffer_, textBuffer_ + 3, textSize_ - 3);
-        textSize_ -= 3;
-        ESP_LOGI(TAG, "Stripped UTF-8 BOM, size now %lu", (unsigned long)textSize_);
-    }
-
-    textBuffer_[textSize_] = '\0';
-
-    ESP_LOGI(TAG, "Loaded %lu bytes from %s",
-             (unsigned long)textSize_, book_.path);
-    return true;
+    snprintf(cacheDirPath_, sizeof(cacheDirPath_),
+             "/sdcard/.cache/%s", hexStr);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -309,9 +267,15 @@ bool ReaderViewController::loadFile() {
 // ════════════════════════════════════════════════════════════════
 
 void ReaderViewController::nextPage() {
-    if (!contentView_ || contentView_->currentPage() + 1 >= contentView_->totalPages()) return;
+    if (!contentView_) return;
 
-    contentView_->setCurrentPage(contentView_->currentPage() + 1);
+    int current = contentView_->currentPage();
+    int total = contentView_->totalPages();
+
+    // 允许翻页：索引未完成时也允许前进（sequential page turning）
+    if (total > 0 && current + 1 >= total) return;
+
+    contentView_->setCurrentPage(current + 1);
     pageFlipCount_++;
 
     // 残影管理
@@ -350,11 +314,34 @@ void ReaderViewController::prevPage() {
 void ReaderViewController::updateFooter() {
     if (!contentView_ || !footerRight_) return;
 
+    char buf[64];
+
+    // 检查 TextSource 状态
+    ink::TextSourceState srcState = textSource_.state();
+    if (srcState == ink::TextSourceState::Converting) {
+        float prog = textSource_.progress();
+        int pct = static_cast<int>(prog * 100);
+        snprintf(buf, sizeof(buf), "\xE6\xAD\xA3\xE5\x9C\xA8\xE8\xBD\xAC\xE6\x8D\xA2\xE7\xBC\x96\xE7\xA0\x81... %d%%", pct);
+        // "正在转换编码... XX%"
+        footerRight_->setText(buf);
+        return;
+    }
+
+    // 检查 PageIndex 状态
+    if (!contentView_->isPageIndexComplete()) {
+        float prog = contentView_->pageIndexProgress();
+        int pct = static_cast<int>(prog * 100);
+        snprintf(buf, sizeof(buf), "\xE6\xAD\xA3\xE5\x9C\xA8\xE7\xB4\xA2\xE5\xBC\x95... %d%%", pct);
+        // "正在索引... XX%"
+        footerRight_->setText(buf);
+        return;
+    }
+
+    // 全部就绪：显示页码
     int total = contentView_->totalPages();
     int current = contentView_->currentPage();
     int percent = (total > 0) ? ((current + 1) * 100 / total) : 0;
 
-    char buf[64];
     snprintf(buf, sizeof(buf), "%d/%d  %d%%", current + 1, total, percent);
     footerRight_->setText(buf);
 }

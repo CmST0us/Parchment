@@ -1,11 +1,12 @@
 /**
  * @file ReaderViewController.h
- * @brief 阅读控制器 — 加载 TXT 文件，通过 ReaderContentView 分页显示，支持翻页和进度保存。
+ * @brief 阅读控制器 — 通过 TextSource 流式加载文件，ReaderContentView 分页显示。
  */
 
 #pragma once
 
 #include "ink_ui/InkUI.h"
+#include "text_source/TextSource.h"
 
 class ReaderContentView;
 
@@ -30,9 +31,11 @@ private:
     book_info_t book_;
     reading_prefs_t prefs_;
 
-    // 文本数据
-    char* textBuffer_ = nullptr;
-    uint32_t textSize_ = 0;
+    // 文本数据源（owned）
+    ink::TextSource textSource_;
+
+    // 缓存目录路径
+    char cacheDirPath_[256] = {};
 
     // 翻页残影管理
     int pageFlipCount_ = 0;
@@ -43,8 +46,8 @@ private:
     ink::TextLabel* footerLeft_ = nullptr;
     ink::TextLabel* footerRight_ = nullptr;
 
-    /// 加载文件到内存
-    bool loadFile();
+    /// 计算缓存目录路径
+    void computeCacheDirPath();
 
     /// 翻到下一页
     void nextPage();
@@ -52,7 +55,7 @@ private:
     /// 翻到上一页
     void prevPage();
 
-    /// 更新页脚文本
+    /// 更新页脚文本（根据当前状态）
     void updateFooter();
 
     /// 获取书名（不含 .txt 后缀）
