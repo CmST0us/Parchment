@@ -16,8 +16,10 @@
 extern "C" {
 #endif
 
-/** SD 卡挂载点路径。 */
+/** SD 卡挂载点路径（可由编译选项覆盖，模拟器重定向到本地目录）。 */
+#ifndef SD_MOUNT_POINT
 #define SD_MOUNT_POINT "/sdcard"
+#endif
 
 /** SD 卡配置参数。 */
 typedef struct {

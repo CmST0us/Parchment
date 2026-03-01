@@ -17,8 +17,10 @@
 
 static const char *TAG = "ui_font";
 
-/** LittleFS 挂载路径。 */
+/** LittleFS 挂载路径（可由编译选项覆盖，模拟器重定向到本地目录）。 */
+#ifndef FONTS_MOUNT_POINT
 #define FONTS_MOUNT_POINT "/fonts"
+#endif
 
 /** 最大可跟踪的字体文件数。 */
 #define MAX_FONT_ENTRIES 8
