@@ -12,21 +12,19 @@ extern "C" {
 }
 
 #include "ink_ui/core/Geometry.h"
+#include "ink_ui/hal/DisplayDriver.h"
 
 namespace ink {
 
-/// 墨水屏刷新模式
+/// 墨水屏刷新模式（ESP32 epdiy 专用值）
 enum class EpdMode {
     DU   = 0x1,   ///< 快速单色直接更新 (~200ms, 不闪)
     GC16 = 0x2,   ///< 灰度全清 (~3s, 闪黑, 消残影)
     GL16 = 0x5,   ///< 灰度更新 (~1.5s, 不闪)
 };
 
-/// 屏幕常量
-constexpr int kScreenWidth  = 540;   ///< 逻辑宽度 (portrait)
-constexpr int kScreenHeight = 960;   ///< 逻辑高度 (portrait)
-constexpr int kFbPhysWidth  = 960;   ///< 物理 framebuffer 宽度 (landscape)
-constexpr int kFbPhysHeight = 540;   ///< 物理 framebuffer 高度 (landscape)
+// 屏幕常量已移至 ink_ui/hal/DisplayDriver.h:
+// kScreenWidth, kScreenHeight, kFbPhysWidth, kFbPhysHeight
 
 /// EPD 显示驱动封装
 class EpdDriver {

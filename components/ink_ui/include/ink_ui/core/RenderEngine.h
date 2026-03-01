@@ -9,7 +9,7 @@
 
 #include "ink_ui/core/Geometry.h"
 #include "ink_ui/core/View.h"
-#include "ink_ui/core/EpdDriver.h"
+#include "ink_ui/hal/DisplayDriver.h"
 
 namespace ink {
 
@@ -25,8 +25,8 @@ struct DirtyEntry {
 /// 墨水屏渲染引擎
 class RenderEngine {
 public:
-    /// 构造，绑定 EpdDriver
-    explicit RenderEngine(EpdDriver& driver);
+    /// 构造，绑定 DisplayDriver
+    explicit RenderEngine(DisplayDriver& driver);
 
     /// 执行一次完整渲染循环（5 阶段）
     void renderCycle(View* rootView);
@@ -35,7 +35,7 @@ public:
     void repairDamage(View* rootView, const Rect& damage);
 
 private:
-    EpdDriver& driver_;
+    DisplayDriver& driver_;
     uint8_t* fb_;
 
     DirtyEntry dirtyRegions_[MAX_DIRTY_REGIONS];

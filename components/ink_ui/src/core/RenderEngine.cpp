@@ -8,11 +8,7 @@
 #include "ink_ui/core/RenderEngine.h"
 #include "ink_ui/core/Canvas.h"
 
-extern "C" {
-#include "esp_log.h"
-}
-
-static const char* TAG = "ink::RenderEngine";
+#include <cstdio>
 
 namespace ink {
 
@@ -24,7 +20,7 @@ static void clearDirtyFlagsRecursive(View* view) {
     }
 }
 
-RenderEngine::RenderEngine(EpdDriver& driver)
+RenderEngine::RenderEngine(DisplayDriver& driver)
     : driver_(driver)
     , fb_(driver.framebuffer()) {
 }
@@ -121,10 +117,10 @@ void RenderEngine::drawView(View* view, bool forced) {
 void RenderEngine::flush() {
     mergeOverlappingRegions();
 
-    // 逐区域刷新（统一使用 GL16 模式，支持灰度且不闪黑）
+    // 逐区域刷新（统一使用 Full 模式，支持灰度且不闪黑）
     for (int i = 0; i < dirtyCount_; i++) {
         Rect phys = logicalToPhysical(dirtyRegions_[i].rect);
-        driver_.updateArea(phys, EpdMode::GL16);
+        driver_.updateArea(phys.x, phys.y, phys.w, phys.h, RefreshMode::Full);
     }
 }
 
@@ -192,7 +188,7 @@ void RenderEngine::repairDamage(View* rootView, const Rect& damage) {
     repairDrawView(rootView, damage);
 
     Rect phys = logicalToPhysical(damage);
-    driver_.updateArea(phys, EpdMode::GL16);
+    driver_.updateArea(phys.x, phys.y, phys.w, phys.h, RefreshMode::Full);
 }
 
 void RenderEngine::repairDrawView(View* view, const Rect& damage) {
