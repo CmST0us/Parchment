@@ -2,7 +2,7 @@
  * @file EpdDriver.cpp
  * @brief EPD 显示驱动 C++ 封装实现。
  *
- * 委托给现有 C 函数 (epd_driver.h)。
+ * 委托给现有 C 函数 (epd_driver.h)，实现 DisplayDriver HAL 接口。
  */
 
 #include "ink_ui/core/EpdDriver.h"
@@ -34,12 +34,20 @@ bool EpdDriver::init() {
     return true;
 }
 
-uint8_t* EpdDriver::framebuffer() const {
+uint8_t* EpdDriver::framebuffer() {
     return epd_driver_get_framebuffer();
 }
 
 bool EpdDriver::updateScreen() {
     return epd_driver_update_screen() == ESP_OK;
+}
+
+bool EpdDriver::updateArea(int x, int y, int w, int h, RefreshMode mode) {
+    if (!initialized_) {
+        return false;
+    }
+    int epdiyMode = static_cast<int>(toEpdMode(mode));
+    return epd_driver_update_area_mode(x, y, w, h, epdiyMode) == ESP_OK;
 }
 
 bool EpdDriver::updateArea(const Rect& physicalArea, EpdMode mode) {
@@ -66,6 +74,15 @@ void EpdDriver::fullClear() {
 
 void EpdDriver::setAllWhite() {
     epd_driver_set_all_white();
+}
+
+EpdMode EpdDriver::toEpdMode(RefreshMode mode) {
+    switch (mode) {
+        case RefreshMode::Full:  return EpdMode::GL16;
+        case RefreshMode::Fast:  return EpdMode::DU;
+        case RefreshMode::Clear: return EpdMode::GC16;
+        default:                 return EpdMode::GL16;
+    }
 }
 
 } // namespace ink

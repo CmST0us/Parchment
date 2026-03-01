@@ -1,8 +1,9 @@
 /**
  * @file EpdDriver.h
- * @brief EPD 显示驱动 C++ 封装。
+ * @brief EPD 显示驱动 C++ 封装 -- DisplayDriver 的 ESP32 实现。
  *
- * 对现有 C 实现 (epd_driver.c) 的薄 wrapper，提供类型安全的 C++ 接口。
+ * 对现有 C 实现 (epd_driver.c) 的薄 wrapper，通过 DisplayDriver HAL 接口
+ * 提供给 InkUI 框架使用。
  */
 
 #pragma once
@@ -23,32 +24,42 @@ enum class EpdMode {
     GL16 = 0x5,   ///< 灰度更新 (~1.5s, 不闪)
 };
 
-// 屏幕常量已移至 ink_ui/hal/DisplayDriver.h:
-// kScreenWidth, kScreenHeight, kFbPhysWidth, kFbPhysHeight
-
-/// EPD 显示驱动封装
-class EpdDriver {
+/// EPD 显示驱动封装（实现 DisplayDriver HAL 接口）
+class EpdDriver : public DisplayDriver {
 public:
     /// 获取单例
     static EpdDriver& instance();
 
+    // ── DisplayDriver 接口实现 ──
+
     /// 初始化 EPD 硬件 (含全屏清除)
-    bool init();
+    bool init() override;
 
     /// 获取帧缓冲区指针 (4bpp, 物理布局 960x540)
-    uint8_t* framebuffer() const;
+    uint8_t* framebuffer() override;
+
+    /// 局部刷新（物理坐标，RefreshMode 映射到 EpdMode）
+    bool updateArea(int x, int y, int w, int h, RefreshMode mode) override;
 
     /// 全屏刷新 (MODE_GL16, 不闪)
-    bool updateScreen();
-
-    /// 局部刷新 (指定物理坐标区域和模式)
-    bool updateArea(const Rect& physicalArea, EpdMode mode);
+    bool updateScreen() override;
 
     /// 全屏闪黑清除 (MODE_GC16, 消残影)
-    void fullClear();
+    void fullClear() override;
 
     /// 将帧缓冲区全部设为白色 (不刷新屏幕)
-    void setAllWhite();
+    void setAllWhite() override;
+
+    /// 物理 framebuffer 宽度
+    int width() const override { return kFbPhysWidth; }
+
+    /// 物理 framebuffer 高度
+    int height() const override { return kFbPhysHeight; }
+
+    // ── ESP32 专用接口 ──
+
+    /// 局部刷新（Rect + EpdMode，保留向后兼容）
+    bool updateArea(const Rect& physicalArea, EpdMode mode);
 
     /// 是否已初始化
     bool isInitialized() const { return initialized_; }
@@ -56,6 +67,9 @@ public:
 private:
     EpdDriver() = default;
     bool initialized_ = false;
+
+    /// RefreshMode → EpdMode 映射
+    static EpdMode toEpdMode(RefreshMode mode);
 };
 
 } // namespace ink
