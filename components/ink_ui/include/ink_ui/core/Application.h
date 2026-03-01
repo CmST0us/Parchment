@@ -1,6 +1,6 @@
 /**
  * @file Application.h
- * @brief InkUI 应用主循环 — 整合事件分发、触摸手势和渲染引擎。
+ * @brief InkUI 应用主循环 -- 整合事件分发、触摸手势和渲染引擎。
  */
 
 #pragma once
@@ -8,10 +8,12 @@
 #include <memory>
 
 #include "ink_ui/core/Event.h"
-#include "ink_ui/core/EpdDriver.h"
 #include "ink_ui/core/RenderEngine.h"
 #include "ink_ui/core/GestureRecognizer.h"
 #include "ink_ui/core/NavigationController.h"
+#include "ink_ui/hal/DisplayDriver.h"
+#include "ink_ui/hal/Platform.h"
+#include "ink_ui/hal/SystemInfo.h"
 
 namespace ink {
 
@@ -22,8 +24,9 @@ class Application {
 public:
     Application() = default;
 
-    /// 初始化所有子系统
-    bool init();
+    /// 初始化所有子系统（接受 HAL 依赖注入）
+    bool init(DisplayDriver& display, TouchDriver& touch,
+              Platform& platform, SystemInfo& system);
 
     /// 启动主事件循环（永不返回）
     [[noreturn]] void run();
@@ -31,7 +34,7 @@ public:
     /// 发送事件到队列（线程安全）
     void postEvent(const Event& event);
 
-    /// 延迟发送事件（使用 esp_timer）
+    /// 延迟发送事件
     void postDelayed(const Event& event, int delayMs);
 
     /// 获取导航控制器
@@ -45,9 +48,13 @@ public:
 
 private:
     NavigationController navigator_;
-    QueueHandle_t eventQueue_ = nullptr;
+    QueueHandle eventQueue_ = nullptr;
     std::unique_ptr<RenderEngine> renderEngine_;
     std::unique_ptr<GestureRecognizer> gesture_;
+
+    // ── HAL 引用 ──
+    Platform* platform_ = nullptr;
+    SystemInfo* system_ = nullptr;
 
     // ── Window View 树 ──
     std::unique_ptr<View> windowRoot_;
@@ -55,7 +62,7 @@ private:
     View* contentArea_ = nullptr;              ///< 非拥有，windowRoot_ 子树中
     ViewController* mountedVC_ = nullptr;      ///< 当前挂载的 VC
     int lastMinute_ = -1;                      ///< 时间更新追踪
-    int64_t lastBatteryUpdateUs_ = 0;          ///< 上次电池更新时间 (µs)
+    int64_t lastBatteryUpdateUs_ = 0;          ///< 上次电池更新时间 (us)
 
     /// 事件队列超时（30 秒）
     static constexpr int kQueueTimeoutMs = 30000;
@@ -63,7 +70,7 @@ private:
     /// 事件队列容量
     static constexpr int kEventQueueSize = 16;
 
-    /// 电池更新间隔 (30 秒, 单位 µs)
+    /// 电池更新间隔 (30 秒, 单位 us)
     static constexpr int64_t kBatteryUpdateIntervalUs = 30 * 1000 * 1000LL;
 
     /// 构建 Window View 树（windowRoot_ + statusBar_ + contentArea_）
@@ -75,7 +82,7 @@ private:
     /// 分发事件
     void dispatchEvent(const Event& event);
 
-    /// 分发触摸事件：hitTest → onTouchEvent 冒泡
+    /// 分发触摸事件：hitTest -> onTouchEvent 冒泡
     void dispatchTouch(const TouchEvent& touch);
 };
 

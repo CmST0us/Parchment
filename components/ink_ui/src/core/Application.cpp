@@ -7,30 +7,22 @@
 #include "ink_ui/core/Canvas.h"
 #include "ink_ui/views/StatusBarView.h"
 
-extern "C" {
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "esp_log.h"
-#include "esp_timer.h"
-#include "battery.h"
-}
-
+#include <cstdio>
 #include <ctime>
-
-static const char* TAG = "ink::App";
 
 namespace ink {
 
-// ── esp_timer 回调：延迟投递事件 ──
+// ── 延迟事件上下文 ──
 
 struct DelayedEventCtx {
-    QueueHandle_t queue;
+    Platform* platform;
+    QueueHandle queue;
     Event event;
 };
 
 static void delayedTimerCallback(void* arg) {
     auto* ctx = static_cast<DelayedEventCtx*>(arg);
-    xQueueSend(ctx->queue, &ctx->event, 0);
+    ctx->platform->queueSend(ctx->queue, &ctx->event, 0);
     delete ctx;
 }
 
@@ -58,7 +50,7 @@ void Application::buildWindowTree() {
     contentArea_ = ca.get();
     windowRoot_->addSubview(std::move(ca));
 
-    ESP_LOGI(TAG, "Window tree built: statusBar(20px) + contentArea");
+    fprintf(stderr, "ink::App: Window tree built: statusBar(20px) + contentArea\n");
 }
 
 // ── VC View 挂载 ──
@@ -101,39 +93,43 @@ void Application::mountViewController(ViewController* vc) {
     windowRoot_->setNeedsLayout();
     windowRoot_->setNeedsDisplay();
 
-    ESP_LOGI(TAG, "Mounted VC: '%s', statusBar=%s",
-             vc->title_.c_str(),
-             (statusBar_ && !statusBar_->isHidden()) ? "visible" : "hidden");
+    fprintf(stderr, "ink::App: Mounted VC: '%s', statusBar=%s\n",
+            vc->title_.c_str(),
+            (statusBar_ && !statusBar_->isHidden()) ? "visible" : "hidden");
 }
 
 // ── 初始化 ──
 
-bool Application::init() {
-    ESP_LOGI(TAG, "Initializing InkUI Application...");
+bool Application::init(DisplayDriver& display, TouchDriver& touch,
+                       Platform& platform, SystemInfo& system) {
+    fprintf(stderr, "ink::App: Initializing InkUI Application...\n");
 
-    // 1. EpdDriver 初始化
-    auto& epd = EpdDriver::instance();
-    if (!epd.init()) {
-        ESP_LOGE(TAG, "EpdDriver init failed");
+    // 保存 HAL 引用
+    platform_ = &platform;
+    system_ = &system;
+
+    // 1. DisplayDriver 初始化
+    if (!display.init()) {
+        fprintf(stderr, "ink::App: DisplayDriver init failed\n");
         return false;
     }
 
     // 2. 创建事件队列
-    eventQueue_ = xQueueCreate(kEventQueueSize, sizeof(Event));
+    eventQueue_ = platform.createQueue(kEventQueueSize, sizeof(Event));
     if (!eventQueue_) {
-        ESP_LOGE(TAG, "Failed to create event queue");
+        fprintf(stderr, "ink::App: Failed to create event queue\n");
         return false;
     }
 
     // 3. 创建 RenderEngine
-    renderEngine_ = std::make_unique<RenderEngine>(epd);
+    renderEngine_ = std::make_unique<RenderEngine>(display);
 
     // 4. 创建 GestureRecognizer
-    gesture_ = std::make_unique<GestureRecognizer>(eventQueue_);
+    gesture_ = std::make_unique<GestureRecognizer>(touch, platform, eventQueue_);
 
     // 5. 启动触摸任务
     if (!gesture_->start()) {
-        ESP_LOGW(TAG, "GestureRecognizer start failed, touch unavailable");
+        fprintf(stderr, "ink::App: GestureRecognizer start failed, touch unavailable\n");
     }
 
     // 6. 构建 Window View 树
@@ -143,22 +139,21 @@ bool Application::init() {
     navigator_.setOnViewControllerChange(
         [this](ViewController* vc) { mountViewController(vc); });
 
-    ESP_LOGI(TAG, "InkUI Application initialized");
+    fprintf(stderr, "ink::App: InkUI Application initialized\n");
     return true;
 }
 
 // ── 主事件循环 ──
 
 void Application::run() {
-    ESP_LOGI(TAG, "Entering main event loop");
+    fprintf(stderr, "ink::App: Entering main event loop\n");
 
     while (true) {
         Event event;
-        BaseType_t received = xQueueReceive(
-            eventQueue_, &event,
-            pdMS_TO_TICKS(kQueueTimeoutMs));
+        bool received = platform_->queueReceive(
+            eventQueue_, &event, kQueueTimeoutMs);
 
-        if (received == pdTRUE) {
+        if (received) {
             dispatchEvent(event);
         }
 
@@ -173,11 +168,11 @@ void Application::run() {
                 statusBar_->updateTime();
             }
 
-            // 电池电量更新（≥30 秒间隔）
-            int64_t nowUs = esp_timer_get_time();
+            // 电池电量更新（>=30 秒间隔）
+            int64_t nowUs = platform_->getTimeUs();
             if (nowUs - lastBatteryUpdateUs_ >= kBatteryUpdateIntervalUs) {
                 lastBatteryUpdateUs_ = nowUs;
-                statusBar_->updateBattery(battery_get_percent());
+                statusBar_->updateBattery(system_->batteryPercent());
             }
         }
 
@@ -243,28 +238,19 @@ void Application::dispatchTouch(const TouchEvent& touch) {
 // ── 事件投递 ──
 
 void Application::postEvent(const Event& event) {
-    if (eventQueue_) {
-        xQueueSend(eventQueue_, &event, pdMS_TO_TICKS(10));
+    if (eventQueue_ && platform_) {
+        platform_->queueSend(eventQueue_, &event, 10);
     }
 }
 
 void Application::postDelayed(const Event& event, int delayMs) {
-    if (!eventQueue_) return;
+    if (!eventQueue_ || !platform_) return;
 
-    auto* ctx = new DelayedEventCtx{eventQueue_, event};
+    auto* ctx = new DelayedEventCtx{platform_, eventQueue_, event};
 
-    esp_timer_create_args_t args = {};
-    args.callback = delayedTimerCallback;
-    args.arg = ctx;
-    args.dispatch_method = ESP_TIMER_TASK;
-    args.name = "ink_delayed";
-
-    esp_timer_handle_t timer;
-    if (esp_timer_create(&args, &timer) == ESP_OK) {
-        esp_timer_start_once(timer, static_cast<uint64_t>(delayMs) * 1000);
-    } else {
+    if (!platform_->startOneShotTimer(delayMs, delayedTimerCallback, ctx)) {
         delete ctx;
-        ESP_LOGE(TAG, "Failed to create delayed timer");
+        fprintf(stderr, "ink::App: Failed to create delayed timer\n");
     }
 }
 
