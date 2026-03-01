@@ -2,7 +2,7 @@
  * @file main.cpp
  * @brief Parchment 墨水屏阅读器 - 应用入口。
  *
- * 初始化板级硬件，通过 InkUI Application 启动事件循环。
+ * 初始化板级硬件，创建 HAL 实例并注入 InkUI Application，启动事件循环。
  */
 
 #include <cstdio>
@@ -22,6 +22,10 @@ extern "C" {
 #include "ui_font.h"
 
 #include "ink_ui/InkUI.h"
+#include "ink_ui/core/EpdDriver.h"
+#include "ink_ui/hal/Esp32TouchDriver.h"
+#include "ink_ui/hal/Esp32Platform.h"
+#include "ink_ui/hal/Esp32SystemInfo.h"
 #include "controllers/BootViewController.h"
 
 static const char* TAG = "parchment";
@@ -35,17 +39,17 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "========================================");
 
     /* 0. NVS 初始化 */
-    ESP_LOGI(TAG, "[0/6] NVS init...");
+    ESP_LOGI(TAG, "[0/7] NVS init...");
     if (settings_store_init() != ESP_OK) {
         ESP_LOGW(TAG, "NVS init failed, settings unavailable");
     }
 
     /* 1. 板级初始化 */
-    ESP_LOGI(TAG, "[1/6] Board init...");
+    ESP_LOGI(TAG, "[1/7] Board init...");
     board_init();
 
-    /* 2. GT911 触摸初始化 */
-    ESP_LOGI(TAG, "[2/6] Touch init...");
+    /* 2. GT911 触摸 I2C 初始化 */
+    ESP_LOGI(TAG, "[2/7] Touch I2C init...");
     gt911_config_t touch_cfg = {};
     touch_cfg.sda_gpio = BOARD_TOUCH_SDA;
     touch_cfg.scl_gpio = BOARD_TOUCH_SCL;
@@ -54,11 +58,11 @@ extern "C" void app_main(void) {
     touch_cfg.i2c_port = BOARD_TOUCH_I2C_NUM;
     touch_cfg.i2c_freq = BOARD_TOUCH_I2C_FREQ;
     if (gt911_init(&touch_cfg) != ESP_OK) {
-        ESP_LOGW(TAG, "Touch init failed, touch unavailable");
+        ESP_LOGW(TAG, "Touch I2C init failed, touch unavailable");
     }
 
     /* 3. SD 卡挂载 */
-    ESP_LOGI(TAG, "[3/6] SD card mount...");
+    ESP_LOGI(TAG, "[3/7] SD card mount...");
     sd_storage_config_t sd_cfg = {};
     sd_cfg.miso_gpio = BOARD_SD_MISO;
     sd_cfg.mosi_gpio = BOARD_SD_MOSI;
@@ -69,18 +73,30 @@ extern "C" void app_main(void) {
     }
 
     /* 4. 电池 ADC 初始化 */
-    ESP_LOGI(TAG, "[4/6] Battery ADC init...");
+    ESP_LOGI(TAG, "[4/7] Battery ADC init...");
     if (battery_init() != ESP_OK) {
         ESP_LOGW(TAG, "Battery ADC init failed, battery display unavailable");
     }
 
     /* 5. 字体子系统初始化 */
-    ESP_LOGI(TAG, "[5/6] Font init...");
+    ESP_LOGI(TAG, "[5/7] Font init...");
     ui_font_init();
 
-    /* 6. InkUI Application 启动 */
-    ESP_LOGI(TAG, "[6/6] InkUI init...");
-    if (!app.init()) {
+    /* 6. HAL 实例创建与初始化 */
+    ESP_LOGI(TAG, "[6/7] HAL init...");
+    auto& epd = ink::EpdDriver::instance();
+    ink::Esp32TouchDriver touch;
+    ink::Esp32Platform platform;
+    ink::Esp32SystemInfo systemInfo;
+
+    // 初始化触摸 GPIO 中断（GT911 I2C 已在步骤 2 完成）
+    if (!touch.init()) {
+        ESP_LOGW(TAG, "TouchDriver init failed, touch unavailable");
+    }
+
+    /* 7. InkUI Application 启动 */
+    ESP_LOGI(TAG, "[7/7] InkUI init...");
+    if (!app.init(epd, touch, platform, systemInfo)) {
         ESP_LOGE(TAG, "InkUI init failed!");
         return;
     }
@@ -91,7 +107,7 @@ extern "C" void app_main(void) {
         if (smallFont) {
             app.statusBar()->setFont(smallFont);
         }
-        app.statusBar()->updateBattery(battery_get_percent());
+        app.statusBar()->updateBattery(systemInfo.batteryPercent());
     }
 
     // 推入启动画面

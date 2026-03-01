@@ -20,13 +20,16 @@ set(INK_UI_SRCS
     "src/views/SeparatorView.cpp"
     "src/views/PageIndicatorView.cpp"
     "src/views/StatusBarView.cpp"
+    "src/hal/Esp32TouchDriver.cpp"
+    "src/hal/Esp32Platform.cpp"
+    "src/hal/Esp32SystemInfo.cpp"
 )
 
 idf_component_register(
     SRCS ${INK_UI_SRCS}
     INCLUDE_DIRS "include"
-    REQUIRES epd_driver epdiy gt911
-    PRIV_REQUIRES ui_core battery
+    REQUIRES epd_driver epdiy
+    PRIV_REQUIRES ui_core battery gt911
 )
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)
