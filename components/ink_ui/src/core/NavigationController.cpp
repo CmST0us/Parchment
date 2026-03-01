@@ -5,11 +5,7 @@
 
 #include "ink_ui/core/NavigationController.h"
 
-extern "C" {
-#include "esp_log.h"
-}
-
-static const char* TAG = "ink::NavCtrl";
+#include <cstdio>
 
 namespace ink {
 
@@ -22,7 +18,8 @@ void NavigationController::push(std::unique_ptr<ViewController> vc) {
     if (!vc) return;
 
     if (static_cast<int>(stack_.size()) >= MAX_NAV_DEPTH) {
-        ESP_LOGE(TAG, "Stack full (depth=%d), push rejected", MAX_NAV_DEPTH);
+        fprintf(stderr, "ink::NavCtrl: Stack full (depth=%d), push rejected\n",
+                MAX_NAV_DEPTH);
         return;
     }
 
@@ -43,14 +40,14 @@ void NavigationController::push(std::unique_ptr<ViewController> vc) {
     newVc->viewWillAppear();
     newVc->viewDidAppear();
 
-    ESP_LOGI(TAG, "Push: depth=%d, title='%s'",
-             static_cast<int>(stack_.size()), newVc->title_.c_str());
+    fprintf(stderr, "ink::NavCtrl: Push: depth=%d, title='%s'\n",
+            static_cast<int>(stack_.size()), newVc->title_.c_str());
 }
 
 void NavigationController::pop() {
     if (stack_.size() <= 1) {
-        ESP_LOGW(TAG, "Cannot pop: stack has %d item(s)",
-                 static_cast<int>(stack_.size()));
+        fprintf(stderr, "ink::NavCtrl: Cannot pop: stack has %d item(s)\n",
+                static_cast<int>(stack_.size()));
         return;
     }
 
@@ -70,8 +67,8 @@ void NavigationController::pop() {
     newTop->viewWillAppear();
     newTop->viewDidAppear();
 
-    ESP_LOGI(TAG, "Pop: depth=%d, now='%s'",
-             static_cast<int>(stack_.size()), newTop->title_.c_str());
+    fprintf(stderr, "ink::NavCtrl: Pop: depth=%d, now='%s'\n",
+            static_cast<int>(stack_.size()), newTop->title_.c_str());
 }
 
 void NavigationController::replace(std::unique_ptr<ViewController> vc) {
@@ -100,8 +97,8 @@ void NavigationController::replace(std::unique_ptr<ViewController> vc) {
     newVc->viewWillAppear();
     newVc->viewDidAppear();
 
-    ESP_LOGI(TAG, "Replace: depth=%d, title='%s'",
-             static_cast<int>(stack_.size()), newVc->title_.c_str());
+    fprintf(stderr, "ink::NavCtrl: Replace: depth=%d, title='%s'\n",
+            static_cast<int>(stack_.size()), newVc->title_.c_str());
 }
 
 ViewController* NavigationController::current() const {
