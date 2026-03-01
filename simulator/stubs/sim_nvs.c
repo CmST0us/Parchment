@@ -7,6 +7,7 @@
 #include "nvs.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #define MAX_NVS_ENTRIES 64
 #define MAX_NVS_HANDLES 8

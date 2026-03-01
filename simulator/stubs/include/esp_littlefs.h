@@ -9,6 +9,7 @@ typedef struct {
     const char* partition_label;
     size_t max_files;
     bool format_if_mount_failed;
+    bool dont_mount;
 } esp_vfs_littlefs_conf_t;
 static inline esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t* conf) { (void)conf; return 0; }
 static inline esp_err_t esp_littlefs_info(const char* label, size_t* total, size_t* used) {

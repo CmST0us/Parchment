@@ -12,13 +12,13 @@
 extern "C" {
 #endif
 
-typedef struct {
+typedef struct EpdUnicodeInterval {
     uint32_t first;
     uint32_t last;
     uint32_t offset;
 } EpdUnicodeInterval;
 
-typedef struct {
+typedef struct EpdGlyph {
     uint16_t width;
     uint16_t height;
     uint16_t advance_x;
@@ -28,7 +28,7 @@ typedef struct {
     uint32_t data_offset;
 } EpdGlyph;
 
-typedef struct {
+typedef struct EpdFont {
     const uint8_t* bitmap;
     const EpdGlyph* glyph;
     const EpdUnicodeInterval* intervals;
