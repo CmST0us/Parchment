@@ -105,6 +105,7 @@ bool Application::init(DisplayDriver& display, TouchDriver& touch,
     fprintf(stderr, "ink::App: Initializing InkUI Application...\n");
 
     // 保存 HAL 引用
+    display_ = &display;
     platform_ = &platform;
     system_ = &system;
 

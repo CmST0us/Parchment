@@ -12,6 +12,7 @@
 #include "ink_ui/core/GestureRecognizer.h"
 #include "ink_ui/core/NavigationController.h"
 #include "ink_ui/hal/DisplayDriver.h"
+#include "ink_ui/hal/TouchDriver.h"
 #include "ink_ui/hal/Platform.h"
 #include "ink_ui/hal/SystemInfo.h"
 
@@ -53,6 +54,7 @@ private:
     std::unique_ptr<GestureRecognizer> gesture_;
 
     // ── HAL 引用 ──
+    DisplayDriver* display_ = nullptr;
     Platform* platform_ = nullptr;
     SystemInfo* system_ = nullptr;
 
