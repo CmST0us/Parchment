@@ -1,29 +1,25 @@
 /**
  * @file GestureRecognizer.h
- * @brief 触摸手势识别器 — 从 GT911 原始数据识别 Tap / LongPress / Swipe。
+ * @brief 触摸手势识别器 -- 从触摸原始数据识别 Tap / LongPress / Swipe。
  *
- * 运行在独立 FreeRTOS 任务中，通过 GT911 中断/轮询读取触摸数据，
+ * 运行在独立任务中，通过 TouchDriver HAL 读取触摸数据，
  * 识别手势后发送 Event 到 Application 的事件队列。
  */
 
 #pragma once
 
 #include "ink_ui/core/Event.h"
-
-extern "C" {
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/semphr.h"
-#include "freertos/task.h"
-}
+#include "ink_ui/hal/TouchDriver.h"
+#include "ink_ui/hal/Platform.h"
 
 namespace ink {
 
 /// 触摸手势识别器
 class GestureRecognizer {
 public:
-    /// 构造，绑定事件队列
-    explicit GestureRecognizer(QueueHandle_t eventQueue);
+    /// 构造，绑定触摸驱动、平台抽象和事件队列
+    GestureRecognizer(TouchDriver& touch, Platform& platform,
+                      QueueHandle eventQueue);
     ~GestureRecognizer();
 
     // 不可拷贝
@@ -37,9 +33,10 @@ public:
     void stop();
 
 private:
-    QueueHandle_t eventQueue_;
-    SemaphoreHandle_t touchSem_ = nullptr;
-    TaskHandle_t taskHandle_ = nullptr;
+    TouchDriver& touch_;
+    Platform& platform_;
+    QueueHandle eventQueue_;
+    TaskHandle taskHandle_ = nullptr;
     volatile bool running_ = false;
 
     // ── 手势识别参数 ──
@@ -51,7 +48,7 @@ private:
     static constexpr int kPollIntervalMs   = 20;    // ms
     static constexpr int kTaskStackSize    = 4096;
     static constexpr int kTaskPriority     = 6;
-    static constexpr int kIntGpio          = 48;    // GT911 INT
+    static constexpr int kIdleTimeoutMs    = 1000;  // 空闲等待超时 (ms)
 
     // ── 手势状态 ──
     enum class GestureState {
@@ -70,8 +67,8 @@ private:
     /// 发送事件到队列
     void sendEvent(const Event& event);
 
-    /// 坐标映射（GT911 直通，裁剪到有效范围）
-    static void mapCoords(uint16_t tx, uint16_t ty, int& sx, int& sy);
+    /// 坐标裁剪到有效范围
+    static void clampCoords(int& sx, int& sy);
 
     /// 距离的平方
     static int distanceSq(int x0, int y0, int x1, int y1);
@@ -86,9 +83,6 @@ private:
 
     /// 触摸任务主循环
     void taskLoop();
-
-    /// GPIO 中断处理（IRAM）
-    static void IRAM_ATTR isrHandler(void* arg);
 };
 
 } // namespace ink
