@@ -12,6 +12,7 @@
 
 #include "SdlDisplayDriver.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -70,21 +71,30 @@ uint8_t* SdlDisplayDriver::framebuffer() {
 
 bool SdlDisplayDriver::updateArea(int x, int y, int w, int h,
                                    ink::RefreshMode /*mode*/) {
-    blitAreaToTexture(x, y, w, h);
-    present();
+    {
+        std::lock_guard<std::mutex> lock(blitMutex_);
+        blitAreaToTexture(x, y, w, h);
+    }
+    needsPresent_.store(true, std::memory_order_release);
     return true;
 }
 
 bool SdlDisplayDriver::updateScreen() {
-    blitAreaToTexture(0, 0, kPhysW, kPhysH);
-    present();
+    {
+        std::lock_guard<std::mutex> lock(blitMutex_);
+        blitAreaToTexture(0, 0, kPhysW, kPhysH);
+    }
+    needsPresent_.store(true, std::memory_order_release);
     return true;
 }
 
 void SdlDisplayDriver::fullClear() {
     memset(fb_, 0xFF, kFbSize);
-    blitAreaToTexture(0, 0, kPhysW, kPhysH);
-    present();
+    {
+        std::lock_guard<std::mutex> lock(blitMutex_);
+        blitAreaToTexture(0, 0, kPhysW, kPhysH);
+    }
+    needsPresent_.store(true, std::memory_order_release);
 }
 
 void SdlDisplayDriver::setAllWhite() {
@@ -136,4 +146,11 @@ void SdlDisplayDriver::present() {
     SDL_RenderClear(renderer_);
     SDL_RenderCopy(renderer_, texture_, nullptr, nullptr);
     SDL_RenderPresent(renderer_);
+}
+
+void SdlDisplayDriver::presentIfNeeded() {
+    if (needsPresent_.exchange(false, std::memory_order_acq_rel)) {
+        std::lock_guard<std::mutex> lock(blitMutex_);
+        present();
+    }
 }

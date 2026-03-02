@@ -128,6 +128,8 @@ int main(int argc, char* argv[]) {
                     break;
             }
         }
+        // 主线程负责 SDL 渲染（SDL API 必须在创建 renderer 的线程调用）
+        display.presentIfNeeded();
         SDL_Delay(10); // 100 Hz poll rate
     }
 

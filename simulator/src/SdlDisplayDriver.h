@@ -11,6 +11,8 @@
 #include "ink_ui/hal/DisplayDriver.h"
 #include <SDL.h>
 #include <cstdint>
+#include <atomic>
+#include <mutex>
 
 /// SDL2 显示驱动实现
 class SdlDisplayDriver : public ink::DisplayDriver {
@@ -46,6 +48,9 @@ private:
     SDL_Texture* texture_ = nullptr;
     uint32_t* pixelBuf_ = nullptr;  ///< 540x960 ARGB 像素缓冲区
 
+    std::atomic<bool> needsPresent_{false};
+    std::mutex blitMutex_;  ///< 保护 pixelBuf_ 的并发读写
+
     /**
      * @brief 将物理区域的 4bpp 数据转换到 ARGB 像素缓冲区。
      *
@@ -53,6 +58,16 @@ private:
      */
     void blitAreaToTexture(int physX, int physY, int physW, int physH);
 
-    /// 将像素缓冲区提交到 SDL 纹理并呈现
+    /// 将像素缓冲区提交到 SDL 纹理并呈现（必须在 SDL 主线程调用）
     void present();
+
+public:
+    /**
+     * @brief 由主线程 SDL 事件循环调用，检查是否需要刷新并提交到屏幕。
+     *
+     * SDL 渲染 API 必须在创建 renderer 的线程（主线程）调用。
+     * 后台线程的 updateArea/updateScreen 只更新 pixelBuf_，
+     * 由主线程在事件循环中调用此方法完成实际 SDL 呈现。
+     */
+    void presentIfNeeded();
 };
