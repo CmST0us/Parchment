@@ -67,6 +67,12 @@ void vTaskDelay(TickType_t ticks) {
     usleep((useconds_t)ticks * 1000);
 }
 
+TickType_t xTaskGetTickCount(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (TickType_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
+
 /* ========================================================================== */
 /*  Semaphore                                                                 */
 /* ========================================================================== */

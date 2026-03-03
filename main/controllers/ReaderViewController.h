@@ -60,4 +60,6 @@ private:
 
     /// 获取书名（不含 .txt 后缀）
     std::string bookDisplayName() const;
+
+    static constexpr int kStatusTimerId = 100;  ///< 状态更新唤醒定时器（仅用于唤醒事件循环）
 };

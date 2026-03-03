@@ -189,12 +189,10 @@ void ReaderViewController::viewDidLoad() {
     contentView_->setTextSource(&textSource_);
     contentView_->setCacheDir(cacheDirPath_);
 
-    // 设置状态回调
+    // 设置状态回调（从后台 task 调用，postEvent 唤醒主循环触发渲染）
     contentView_->setStatusCallback([this]() {
         updateFooter();
-        if (contentView_) {
-            contentView_->setNeedsDisplay();
-        }
+        app_.postEvent(ink::Event::makeTimer(kStatusTimerId));
     });
 
     // 恢复阅读进度

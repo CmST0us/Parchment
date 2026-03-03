@@ -447,7 +447,7 @@ void ReaderContentView::doPaginate() {
     ESP_LOGI(TAG, "BG paginate: starting");
 
     uint32_t offset = 0;
-    uint32_t lastProgressNotify = 0;
+    TickType_t lastNotifyTick = xTaskGetTickCount();
 
     while (!paginateStopRequested_) {
         uint32_t avail = textSource_->availableSize();
@@ -467,16 +467,11 @@ void ReaderContentView::doPaginate() {
 
         offset = layout.endOffset;
 
-        // 进度通知（每 10% 或至少每 100 页）
-        uint32_t total = textSource_->totalSize();
-        if (total == 0) total = textSource_->availableSize();
-        if (total > 0) {
-            uint32_t progressPct = offset * 100 / total;
-            uint32_t lastPct = lastProgressNotify;
-            if (progressPct >= lastPct + 10) {
-                lastProgressNotify = progressPct;
-                if (statusCallback_) statusCallback_();
-            }
+        // 进度通知（每 2 秒刷新一次）
+        TickType_t now = xTaskGetTickCount();
+        if ((now - lastNotifyTick) >= pdMS_TO_TICKS(2000)) {
+            lastNotifyTick = now;
+            if (statusCallback_) statusCallback_();
         }
 
         vTaskDelay(1);  // 至少 1 tick，让 IDLE task 喂看门狗

@@ -23,7 +23,5 @@ private:
     ink::TextLabel* statusLabel_ = nullptr;
     ink::ProgressBarView* progressBar_ = nullptr;
 
-    static constexpr int kTimerId = 1;       ///< 导航跳转定时器
-    static constexpr int kScanTimerId = 2;   ///< 书籍扫描触发器
-    static constexpr int kDelayMs = 2000;
+    static constexpr int kScanTimerId = 1;   ///< 书籍扫描触发器
 };

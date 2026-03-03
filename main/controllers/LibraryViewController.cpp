@@ -195,8 +195,9 @@ void LibraryViewController::buildPage() {
     }
 
     // 计算当前页的书籍范围
-    int startIdx = currentPage_ * kItemsPerPage;
-    int endIdx = startIdx + kItemsPerPage;
+    int perPage = itemsPerPage();
+    int startIdx = currentPage_ * perPage;
+    int endIdx = startIdx + perPage;
     if (endIdx > static_cast<int>(bookCount)) {
         endIdx = static_cast<int>(bookCount);
     }
@@ -339,11 +340,11 @@ void LibraryViewController::updatePageInfo() {
     }
 
     // 更新分页
+    int perPage = itemsPerPage();
     if (bookCount == 0) {
         totalPages_ = 0;
     } else {
-        totalPages_ = (static_cast<int>(bookCount) + kItemsPerPage - 1) /
-                      kItemsPerPage;
+        totalPages_ = (static_cast<int>(bookCount) + perPage - 1) / perPage;
     }
 
     if (currentPage_ >= totalPages_ && totalPages_ > 0) {
@@ -354,6 +355,16 @@ void LibraryViewController::updatePageInfo() {
         pageIndicator_->setPage(currentPage_,
                                 totalPages_ > 0 ? totalPages_ : 1);
     }
+}
+
+int LibraryViewController::itemsPerPage() const {
+    // 固定 UI 元素高度: StatusBar(20) + Header(48) + sep(1) +
+    // Subheader(36) + sep(1) + sep(1) + PageIndicator(48) = 155
+    constexpr int kFixedHeight = 20 + 48 + 1 + 36 + 1 + 1 + 48;
+    int listHeight = ink::kScreenHeight - kFixedHeight;
+    // 每条目占 kItemHeight + 分隔线，最后一条无分隔线
+    int n = (listHeight + kSeparatorHeight) / (kItemHeight + kSeparatorHeight);
+    return n > 0 ? n : 1;
 }
 
 void LibraryViewController::goToPage(int page) {

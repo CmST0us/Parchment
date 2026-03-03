@@ -138,20 +138,11 @@ void BootViewController::handleEvent(const ink::Event& event) {
         esp_err_t err = book_store_scan();
         if (err == ESP_OK) {
             size_t count = book_store_get_count();
-            char buf[64];
-            snprintf(buf, sizeof(buf), "发现 %zu 本书", count);
-            statusLabel_->setText(buf);
-            if (progressBar_) {
-                progressBar_->setValue(100);
-            }
+            ESP_LOGI(TAG, "Found %zu books — navigating to Library", count);
         } else {
-            statusLabel_->setText("SD 卡不可用");
+            ESP_LOGW(TAG, "SD card unavailable — navigating to Library");
         }
-        // 扫描完成后延迟跳转到书库
-        app_.postDelayed(ink::Event::makeTimer(kTimerId), kDelayMs);
-
-    } else if (event.timer.timerId == kTimerId) {
-        ESP_LOGI(TAG, "Timer fired — navigating to Library");
+        // 扫描完成，立即跳转到书库
         auto libraryVC = std::make_unique<LibraryViewController>(app_);
         app_.navigator().replace(std::move(libraryVC));
     }

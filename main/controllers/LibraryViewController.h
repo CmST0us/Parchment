@@ -33,8 +33,11 @@ private:
     int currentPage_ = 0;
     int totalPages_ = 0;
 
-    static constexpr int kItemsPerPage = 9;
     static constexpr int kItemHeight = 96;
+    static constexpr int kSeparatorHeight = 1;
+
+    /// 根据列表容器高度计算每页可完整显示的条目数
+    int itemsPerPage() const;
 
     /// 重建当前页的书籍列表
     void buildPage();

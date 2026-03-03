@@ -11,6 +11,7 @@ BaseType_t xTaskCreate(void(*fn)(void*), const char* name,
                         int priority, TaskHandle_t* handle);
 void vTaskDelete(TaskHandle_t handle);
 void vTaskDelay(TickType_t ticks);
+TickType_t xTaskGetTickCount(void);
 
 /// Pinned-to-core variant (core argument ignored in simulator)
 static inline BaseType_t xTaskCreatePinnedToCore(
