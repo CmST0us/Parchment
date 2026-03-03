@@ -10,11 +10,9 @@ dependencies.lock
 .vscode/
 .idea/
 
-# Claude Code
-.claude/
-
-# Cursor
-.cursor/
+# Local settings (not shared)
+.claude/settings.local.json
+.claude/memory/
 
 # macOS
 .DS_Store
