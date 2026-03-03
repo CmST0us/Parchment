@@ -12,7 +12,6 @@ dependencies.lock
 
 # Local settings (not shared)
 .claude/settings.local.json
-.claude/memory/
 
 # macOS
 .DS_Store
