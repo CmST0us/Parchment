@@ -92,4 +92,5 @@ target_include_directories(parchment_sim PRIVATE
     ${SDL2_INCLUDE_DIRS}
 )
 
+target_link_directories(parchment_sim PRIVATE ${SDL2_LIBRARY_DIRS})
 target_link_libraries(parchment_sim ${SDL2_LIBRARIES} pthread)

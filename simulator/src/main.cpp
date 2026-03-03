@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
+#include <unistd.h>
 #include <thread>
 #include <atomic>
 #include <SDL.h>
