@@ -120,29 +120,37 @@ void BootViewController::loadView() {
 
 void BootViewController::viewDidLoad() {
     ESP_LOGI(TAG, "viewDidLoad");
-
-    // ── 扫描 SD 卡书籍 ──
-    esp_err_t err = book_store_scan();
-    if (err == ESP_OK) {
-        size_t count = book_store_get_count();
-        char buf[64];
-        snprintf(buf, sizeof(buf), "发现 %zu 本书", count);
-        statusLabel_->setText(buf);
-        if (progressBar_) {
-            progressBar_->setValue(100);
-        }
-    } else {
-        statusLabel_->setText("SD 卡不可用");
-    }
+    // 书籍扫描延后到事件循环中执行，确保首屏先渲染
 }
 
 void BootViewController::viewDidAppear() {
-    ESP_LOGI(TAG, "viewDidAppear — posting delayed timer (%d ms)", kDelayMs);
-    app_.postDelayed(ink::Event::makeTimer(kTimerId), kDelayMs);
+    ESP_LOGI(TAG, "viewDidAppear — posting scan event");
+    // 投递扫描事件，等首屏渲染完毕后再执行扫描
+    app_.postEvent(ink::Event::makeTimer(kScanTimerId));
 }
 
 void BootViewController::handleEvent(const ink::Event& event) {
-    if (event.type == ink::EventType::Timer && event.timer.timerId == kTimerId) {
+    if (event.type != ink::EventType::Timer) return;
+
+    if (event.timer.timerId == kScanTimerId) {
+        // 扫描 SD 卡书籍
+        ESP_LOGI(TAG, "Scanning books...");
+        esp_err_t err = book_store_scan();
+        if (err == ESP_OK) {
+            size_t count = book_store_get_count();
+            char buf[64];
+            snprintf(buf, sizeof(buf), "发现 %zu 本书", count);
+            statusLabel_->setText(buf);
+            if (progressBar_) {
+                progressBar_->setValue(100);
+            }
+        } else {
+            statusLabel_->setText("SD 卡不可用");
+        }
+        // 扫描完成后延迟跳转到书库
+        app_.postDelayed(ink::Event::makeTimer(kTimerId), kDelayMs);
+
+    } else if (event.timer.timerId == kTimerId) {
         ESP_LOGI(TAG, "Timer fired — navigating to Library");
         auto libraryVC = std::make_unique<LibraryViewController>(app_);
         app_.navigator().replace(std::move(libraryVC));

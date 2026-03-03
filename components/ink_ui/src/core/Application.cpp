@@ -149,6 +149,11 @@ bool Application::init(DisplayDriver& display, TouchDriver& touch,
 void Application::run() {
     fprintf(stderr, "ink::App: Entering main event loop\n");
 
+    // 初始渲染：确保首屏立即显示，不需等待事件
+    if (windowRoot_) {
+        renderEngine_->renderCycle(windowRoot_.get());
+    }
+
     while (true) {
         Event event;
         bool received = platform_->queueReceive(
