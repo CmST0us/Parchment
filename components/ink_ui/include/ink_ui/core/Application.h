@@ -10,6 +10,7 @@
 #include "ink_ui/core/Event.h"
 #include "ink_ui/core/RenderEngine.h"
 #include "ink_ui/core/GestureRecognizer.h"
+#include "ink_ui/core/ModalPresenter.h"
 #include "ink_ui/core/NavigationController.h"
 #include "ink_ui/hal/DisplayDriver.h"
 #include "ink_ui/hal/TouchDriver.h"
@@ -47,6 +48,9 @@ public:
     /// 获取状态栏 View（供外部设置字体等）
     StatusBarView* statusBar() { return statusBar_; }
 
+    /// 获取模态呈现器
+    ModalPresenter& modalPresenter() { return *modalPresenter_; }
+
 private:
     NavigationController navigator_;
     QueueHandle eventQueue_ = nullptr;
@@ -58,11 +62,14 @@ private:
     Platform* platform_ = nullptr;
     SystemInfo* system_ = nullptr;
 
-    // ── Window View 树 ──
-    std::unique_ptr<View> windowRoot_;
+    // ── Screen View 树 ──
+    std::unique_ptr<View> screenRoot_;         ///< 全屏根 View（FlexDirection::None）
+    View* windowRoot_ = nullptr;               ///< 非拥有，screenRoot_ 子树中
+    View* overlayRoot_ = nullptr;              ///< 非拥有，screenRoot_ 子树中
     StatusBarView* statusBar_ = nullptr;       ///< 非拥有，windowRoot_ 子树中
     View* contentArea_ = nullptr;              ///< 非拥有，windowRoot_ 子树中
     ViewController* mountedVC_ = nullptr;      ///< 当前挂载的 VC
+    std::unique_ptr<ModalPresenter> modalPresenter_;  ///< 模态呈现器
     int lastMinute_ = -1;                      ///< 时间更新追踪
     int64_t lastBatteryUpdateUs_ = 0;          ///< 上次电池更新时间 (us)
 
@@ -75,8 +82,11 @@ private:
     /// 电池更新间隔 (30 秒, 单位 us)
     static constexpr int64_t kBatteryUpdateIntervalUs = 30 * 1000 * 1000LL;
 
-    /// 构建 Window View 树（windowRoot_ + statusBar_ + contentArea_）
+    /// 构建 Screen View 树（screenRoot_ + windowRoot_ + overlayRoot_）
     void buildWindowTree();
+
+    /// 判断 View 是否为 overlayRoot_ 的子孙节点
+    bool isInOverlay(const View* view) const;
 
     /// 挂载 VC 的 root view 到 contentArea_
     void mountViewController(ViewController* vc);

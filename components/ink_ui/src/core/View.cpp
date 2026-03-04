@@ -18,6 +18,18 @@ View::~View() = default;
 void View::addSubview(std::unique_ptr<View> child) {
     if (!child) return;
     child->parent_ = this;
+    // 如果子 View 有脏标记，向上传播 subtreeNeedsDisplay
+    if (child->needsDisplay() || child->subtreeNeedsDisplay()) {
+        child->propagateDirtyUp();
+    }
+    // 如果子 View 需要布局，向上传播 needsLayout
+    if (child->needsLayout()) {
+        View* v = this;
+        while (v) {
+            v->needsLayout_ = true;
+            v = v->parent_;
+        }
+    }
     subviews_.push_back(std::move(child));
 }
 

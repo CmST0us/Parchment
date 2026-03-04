@@ -56,8 +56,70 @@ void LibraryViewController::loadView() {
     auto header = std::make_unique<ink::HeaderView>();
     header->setFont(fontLarge);
     header->setTitle("Parchment");
-    header->setLeftIcon(UI_ICON_MENU.data, []() {
-        ESP_LOGI("LibraryVC", "Menu tapped (not implemented)");
+    header->setLeftIcon(UI_ICON_MENU.data, [this]() {
+        ESP_LOGI("LibraryVC", "Menu tapped — showing test Alert");
+
+        // iOS 风格 Alert: 标题 + 消息 + 分隔线 + 平面按钮
+        auto card = std::make_unique<ink::ShadowCardView>();
+        card->flexStyle_.direction = ink::FlexDirection::Column;
+        card->flexStyle_.alignItems = ink::Align::Stretch;
+        card->flexStyle_.padding = ink::Insets{24, 24, 0, 24};
+        card->flexStyle_.gap = 0;
+
+        // 标题
+        auto title = std::make_unique<ink::TextLabel>();
+        title->setFont(ui_font_get(24));
+        title->setText("Test Alert");
+        title->setColor(ink::Color::Black);
+        title->setAlignment(ink::Align::Center);
+        card->addSubview(std::move(title));
+
+        // 标题与消息间距
+        auto spacer1 = std::make_unique<ink::View>();
+        spacer1->setBackgroundColor(ink::Color::White);
+        spacer1->flexBasis_ = 8;
+        card->addSubview(std::move(spacer1));
+
+        // 消息
+        auto message = std::make_unique<ink::TextLabel>();
+        message->setFont(ui_font_get(16));
+        message->setText("Modal presenter is working!");
+        message->setColor(ink::Color::Dark);
+        message->setAlignment(ink::Align::Center);
+        card->addSubview(std::move(message));
+
+        // 消息与分隔线间距
+        auto spacer2 = std::make_unique<ink::View>();
+        spacer2->setBackgroundColor(ink::Color::White);
+        spacer2->flexBasis_ = 20;
+        card->addSubview(std::move(spacer2));
+
+        // 分隔线
+        auto sep = std::make_unique<ink::SeparatorView>();
+        sep->flexBasis_ = 1;
+        card->addSubview(std::move(sep));
+
+        // iOS 风格平面按钮: 点击区域 + 居中文字
+        auto okBtn = std::make_unique<TappableView>();
+        okBtn->flexBasis_ = 44;
+        okBtn->setBackgroundColor(ink::Color::White);
+        okBtn->flexStyle_.direction = ink::FlexDirection::Row;
+        okBtn->flexStyle_.alignItems = ink::Align::Center;
+
+        auto okLabel = std::make_unique<ink::TextLabel>();
+        okLabel->setFont(ui_font_get(20));
+        okLabel->setText("确定");
+        okLabel->setColor(ink::Color::Black);
+        okLabel->setAlignment(ink::Align::Center);
+        okLabel->flexGrow_ = 1;
+        okBtn->addSubview(std::move(okLabel));
+
+        okBtn->onTap_ = [this]() {
+            app_.modalPresenter().dismiss(ink::ModalChannel::Modal);
+        };
+        card->addSubview(std::move(okBtn));
+
+        app_.modalPresenter().showAlert(std::move(card));
     });
     header->setRightIcon(UI_ICON_SETTINGS.data, []() {
         ESP_LOGI("LibraryVC", "Settings tapped (not implemented)");

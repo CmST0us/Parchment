@@ -13,6 +13,7 @@ namespace ink {
 enum class FlexDirection {
     Column,     ///< 纵向排列（默认）
     Row,        ///< 横向排列
+    None,       ///< 不定位子节点，保留手动设置的 frame
 };
 
 /// 对齐方式（交叉轴）

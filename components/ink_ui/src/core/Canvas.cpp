@@ -59,6 +59,10 @@ void Canvas::setPixel(int absX, int absY, uint8_t gray) {
     }
 }
 
+void Canvas::drawPixel(int x, int y, uint8_t gray) {
+    setPixel(clip_.x + x, clip_.y + y, gray);
+}
+
 uint8_t Canvas::getPixel(int absX, int absY) const {
     if (absX < 0 || absX >= 540 || absY < 0 || absY >= 960) {
         return 0xFF;

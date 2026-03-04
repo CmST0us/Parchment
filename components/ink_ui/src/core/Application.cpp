@@ -5,6 +5,7 @@
 
 #include "ink_ui/core/Application.h"
 #include "ink_ui/core/Canvas.h"
+#include "ink_ui/core/ModalPresenter.h"
 #include "ink_ui/views/StatusBarView.h"
 
 #include <cstdio>
@@ -29,18 +30,24 @@ static void delayedTimerCallback(void* arg) {
 // ── Window View 树构建 ──
 
 void Application::buildWindowTree() {
-    // windowRoot_: 全屏 Column 容器
-    windowRoot_ = std::make_unique<View>();
-    windowRoot_->setFrame({0, 0, kScreenWidth, kScreenHeight});
-    windowRoot_->setBackgroundColor(Color::White);
-    windowRoot_->flexStyle_.direction = FlexDirection::Column;
-    windowRoot_->flexStyle_.alignItems = Align::Stretch;
+    // screenRoot_: 全屏根 View，FlexDirection::None（子节点自由叠放）
+    screenRoot_ = std::make_unique<View>();
+    screenRoot_->setFrame({0, 0, kScreenWidth, kScreenHeight});
+    screenRoot_->setBackgroundColor(Color::White);
+    screenRoot_->flexStyle_.direction = FlexDirection::None;
+
+    // windowRoot_: 全屏 Column 容器（screenRoot_ 的第一个子节点）
+    auto wr = std::make_unique<View>();
+    wr->setFrame({0, 0, kScreenWidth, kScreenHeight});
+    wr->setBackgroundColor(Color::White);
+    wr->flexStyle_.direction = FlexDirection::Column;
+    wr->flexStyle_.alignItems = Align::Stretch;
 
     // statusBar_: 20px 高，由 Application 管理（字体由 main.cpp 设置）
     auto sb = std::make_unique<StatusBarView>();
     sb->flexBasis_ = 20;
     statusBar_ = sb.get();
-    windowRoot_->addSubview(std::move(sb));
+    wr->addSubview(std::move(sb));
 
     // contentArea_: 填满剩余空间，VC 的 root view 挂载于此
     auto ca = std::make_unique<View>();
@@ -48,9 +55,23 @@ void Application::buildWindowTree() {
     ca->flexStyle_.direction = FlexDirection::Column;
     ca->flexStyle_.alignItems = Align::Stretch;
     contentArea_ = ca.get();
-    windowRoot_->addSubview(std::move(ca));
+    wr->addSubview(std::move(ca));
 
-    fprintf(stderr, "ink::App: Window tree built: statusBar(20px) + contentArea\n");
+    // 将 windowRoot_ 添加到 screenRoot_（所有权移交）
+    windowRoot_ = wr.get();
+    screenRoot_->addSubview(std::move(wr));
+
+    // overlayRoot_: 全屏叠加层，FlexDirection::None，初始 hidden
+    auto overlay = std::make_unique<View>();
+    overlay->setFrame({0, 0, kScreenWidth, kScreenHeight});
+    overlay->setBackgroundColor(Color::Clear);
+    overlay->setOpaque(false);  // 透明叠加层，不清除底层内容
+    overlay->flexStyle_.direction = FlexDirection::None;
+    overlay->setHidden(true);
+    overlayRoot_ = overlay.get();
+    screenRoot_->addSubview(std::move(overlay));
+
+    fprintf(stderr, "ink::App: Screen tree built: screenRoot -> windowRoot + overlayRoot\n");
 }
 
 // ── VC View 挂载 ──
@@ -133,10 +154,14 @@ bool Application::init(DisplayDriver& display, TouchDriver& touch,
         fprintf(stderr, "ink::App: GestureRecognizer start failed, touch unavailable\n");
     }
 
-    // 6. 构建 Window View 树
+    // 6. 构建 Screen View 树
     buildWindowTree();
 
-    // 7. 设置 NavigationController VC 切换回调
+    // 7. 创建 ModalPresenter
+    modalPresenter_ = std::make_unique<ModalPresenter>(
+        overlayRoot_, screenRoot_.get(), *renderEngine_, *this);
+
+    // 8. 设置 NavigationController VC 切换回调
     navigator_.setOnViewControllerChange(
         [this](ViewController* vc) { mountViewController(vc); });
 
@@ -150,8 +175,8 @@ void Application::run() {
     fprintf(stderr, "ink::App: Entering main event loop\n");
 
     // 初始渲染：确保首屏立即显示，不需等待事件
-    if (windowRoot_) {
-        renderEngine_->renderCycle(windowRoot_.get());
+    if (screenRoot_) {
+        renderEngine_->renderCycle(screenRoot_.get());
     }
 
     while (true) {
@@ -182,11 +207,22 @@ void Application::run() {
             }
         }
 
-        // 每轮循环末尾执行 renderCycle（以 windowRoot_ 为根）
-        if (windowRoot_) {
-            renderEngine_->renderCycle(windowRoot_.get());
+        // 每轮循环末尾执行 renderCycle（以 screenRoot_ 为根）
+        if (screenRoot_) {
+            renderEngine_->renderCycle(screenRoot_.get());
         }
     }
+}
+
+// ── 辅助函数 ──
+
+bool Application::isInOverlay(const View* view) const {
+    const View* v = view;
+    while (v) {
+        if (v == overlayRoot_) return true;
+        v = v->parent();
+    }
+    return false;
 }
 
 // ── 事件分发 ──
@@ -206,14 +242,26 @@ void Application::dispatchEvent(const Event& event) {
             break;
         }
         case EventType::Swipe: {
-            // Swipe 直接传给当前 VC
+            // 阻塞模态时吞掉 Swipe
+            if (modalPresenter_ && modalPresenter_->isBlocking()) break;
             auto* vc = navigator_.current();
             if (vc) {
                 vc->handleEvent(event);
             }
             break;
         }
-        case EventType::Timer:
+        case EventType::Timer: {
+            // Timer 事件先交给 ModalPresenter 处理
+            if (modalPresenter_ &&
+                modalPresenter_->handleTimer(event.timer.timerId)) {
+                break;  // ModalPresenter 已消费
+            }
+            auto* vc = navigator_.current();
+            if (vc) {
+                vc->handleEvent(event);
+            }
+            break;
+        }
         case EventType::Custom: {
             auto* vc = navigator_.current();
             if (vc) {
@@ -225,11 +273,16 @@ void Application::dispatchEvent(const Event& event) {
 }
 
 void Application::dispatchTouch(const TouchEvent& touch) {
-    if (!windowRoot_) return;
+    if (!screenRoot_) return;
 
-    // hitTest 从 windowRoot_ 开始
-    View* target = windowRoot_->hitTest(touch.x, touch.y);
+    // hitTest 从 screenRoot_ 开始（覆盖 overlayRoot_ 和 windowRoot_）
+    View* target = screenRoot_->hitTest(touch.x, touch.y);
     if (!target) return;
+
+    // 阻塞模态时，吞掉目标不在 overlayRoot_ 子树中的触摸
+    if (modalPresenter_ && modalPresenter_->isBlocking() && !isInOverlay(target)) {
+        return;
+    }
 
     // 沿 parent 链冒泡直到被消费
     View* v = target;

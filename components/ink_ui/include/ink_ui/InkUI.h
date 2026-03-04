@@ -27,6 +27,7 @@
 #include "ink_ui/core/Application.h"
 
 // Views (widget 组件)
+#include "ink_ui/views/ShadowCardView.h"
 #include "ink_ui/views/TextLabel.h"
 #include "ink_ui/views/IconView.h"
 #include "ink_ui/views/ButtonView.h"

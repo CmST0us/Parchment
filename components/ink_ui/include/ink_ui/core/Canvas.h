@@ -68,6 +68,11 @@ public:
     /// 绘制任意方向直线（局部坐标，Bresenham 算法）
     void drawLine(Point from, Point to, uint8_t gray);
 
+    // ── 像素 ──
+
+    /// 绘制单个像素（局部坐标，含裁剪检查）
+    void drawPixel(int x, int y, uint8_t gray);
+
     // ── 位图 ──
 
     /// 绘制 4bpp 灰度位图（局部坐标）

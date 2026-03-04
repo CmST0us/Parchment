@@ -18,6 +18,17 @@ void flexLayout(View* container) {
     if (!container) return;
 
     const FlexStyle& style = container->flexStyle_;
+
+    // FlexDirection::None: 跳过子节点定位，仅递归调用可见子 View 的 onLayout()
+    if (style.direction == FlexDirection::None) {
+        for (auto& child : container->subviews()) {
+            if (!child->isHidden()) {
+                child->onLayout();
+            }
+        }
+        return;
+    }
+
     const Rect bounds = container->bounds();
 
     // 内容区域（扣除 padding）
