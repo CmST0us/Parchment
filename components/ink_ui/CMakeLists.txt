@@ -22,6 +22,7 @@ set(INK_UI_SRCS
     "src/views/PageIndicatorView.cpp"
     "src/views/ShadowCardView.cpp"
     "src/views/AlertView.cpp"
+    "src/views/SheetView.cpp"
     "src/views/StatusBarView.cpp"
     "src/hal/Esp32TouchDriver.cpp"
     "src/hal/Esp32Platform.cpp"

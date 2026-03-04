@@ -13,6 +13,24 @@
 
 #include <cstdio>
 
+namespace {
+
+/// 透明背景 View，捕获点击触发 dismiss（Sheet 外区域关闭用）
+class BackdropView : public ink::View {
+public:
+    ink::ModalPresenter* presenter_ = nullptr;
+
+    bool onTouchEvent(const ink::TouchEvent& event) override {
+        if (event.type == ink::TouchType::Tap && presenter_) {
+            presenter_->dismiss(ink::ModalChannel::Modal);
+            return true;
+        }
+        return false;
+    }
+};
+
+} // anonymous namespace
+
 namespace ink {
 
 ModalPresenter::ModalPresenter(View* overlayRoot, View* screenRoot,
@@ -65,6 +83,40 @@ void ModalPresenter::showActionSheet(std::unique_ptr<View> content) {
 
 void ModalPresenter::showLoading(std::unique_ptr<View> content) {
     showModal(std::move(content), ModalPriority::Loading);
+}
+
+void ModalPresenter::showSheet(std::unique_ptr<View> content) {
+    if (!content) return;
+
+    // 计算 Sheet 高度和位置
+    Size sheetSize = content->intrinsicSize();
+    int sheetH = (sheetSize.h > 0) ? sheetSize.h : 400;
+    int sheetY = kScreenHeight - sheetH;
+
+    // 设置 Sheet 的 frame
+    content->setFrame({0, sheetY, kScreenWidth, sheetH});
+
+    // 创建全屏 wrapper（透明，无布局）
+    auto wrapper = std::make_unique<View>();
+    wrapper->setFrame({0, 0, kScreenWidth, kScreenHeight});
+    wrapper->setBackgroundColor(Color::Clear);
+    wrapper->setOpaque(false);
+    wrapper->flexStyle_.direction = FlexDirection::None;
+
+    // BackdropView 覆盖 Sheet 上方区域，点击触发关闭
+    auto backdrop = std::make_unique<BackdropView>();
+    backdrop->setBackgroundColor(Color::Clear);
+    backdrop->setOpaque(false);
+    backdrop->setFrame({0, 0, kScreenWidth, sheetY});
+    backdrop->presenter_ = this;
+    wrapper->addSubview(std::move(backdrop));
+
+    // Sheet 内容
+    wrapper->addSubview(std::move(content));
+
+    // 通过 showModal 呈现（ActionSheet 优先级）
+    // wrapper 全屏，centerOnScreen 会定位到 {0, 0}
+    showModal(std::move(wrapper), ModalPriority::ActionSheet);
 }
 
 void ModalPresenter::showModal(std::unique_ptr<View> content, ModalPriority priority) {

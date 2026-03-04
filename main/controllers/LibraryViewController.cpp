@@ -74,8 +74,27 @@ void LibraryViewController::loadView() {
 
         app_.modalPresenter().showAlert(std::move(alert));
     });
-    header->setRightIcon(UI_ICON_SETTINGS.data, []() {
-        ESP_LOGI("LibraryVC", "Settings tapped (not implemented)");
+    header->setRightIcon(UI_ICON_SETTINGS.data, [this]() {
+        ESP_LOGI("LibraryVC", "Settings tapped — showing Sheet");
+
+        auto sheet = std::make_unique<ink::SheetView>();
+        sheet->setFont(ui_font_get(20));
+        sheet->setTitleFont(ui_font_get(24));
+        sheet->setTitle("设置");
+        sheet->addItem("阅读设置", [this]() {
+            ESP_LOGI("LibraryVC", "Reading settings tapped");
+            app_.modalPresenter().dismiss(ink::ModalChannel::Modal);
+        });
+        sheet->addItem("显示设置", [this]() {
+            ESP_LOGI("LibraryVC", "Display settings tapped");
+            app_.modalPresenter().dismiss(ink::ModalChannel::Modal);
+        });
+        sheet->addItem("关于", [this]() {
+            ESP_LOGI("LibraryVC", "About tapped");
+            app_.modalPresenter().dismiss(ink::ModalChannel::Modal);
+        });
+
+        app_.modalPresenter().showSheet(std::move(sheet));
     });
     header->flexBasis_ = 48;
     view_->addSubview(std::move(header));

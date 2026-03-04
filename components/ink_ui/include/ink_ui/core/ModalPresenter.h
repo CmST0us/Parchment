@@ -48,6 +48,9 @@ public:
     /// 显示 Loading（居中，阻塞，最低优先级）
     void showLoading(std::unique_ptr<View> content);
 
+    /// 显示底部 Sheet（全宽，从底部弹出，阻塞，中优先级）
+    void showSheet(std::unique_ptr<View> content);
+
     /// 关闭指定通道的当前模态
     void dismiss(ModalChannel channel);
 
