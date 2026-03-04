@@ -200,7 +200,10 @@ void RenderEngine::repairDrawView(View* view, const Rect& damage) {
 
     Canvas canvas(fb_, sf);
     if (view->backgroundColor() != Color::Clear) {
-        canvas.clear(view->backgroundColor());
+        // 仅清除 damage 与当前 view 的交集区域，避免破坏 damage 外的 framebuffer
+        Rect inter = sf.intersection(damage);
+        Rect local = {inter.x - sf.x, inter.y - sf.y, inter.w, inter.h};
+        canvas.fillRect(local, view->backgroundColor());
     }
     view->onDraw(canvas);
 
