@@ -43,6 +43,8 @@ private:
     // UI 元素指针（非拥有）
     ReaderContentView* contentView_ = nullptr;
     ink::HeaderView* headerView_ = nullptr;
+    ink::SeparatorView* headerSep_ = nullptr;
+    ink::View* headerOverlay_ = nullptr;  ///< Header 浮层容器（叠加在内容上方）
     ink::TextLabel* footerLeft_ = nullptr;
     ink::TextLabel* footerRight_ = nullptr;
 

@@ -101,7 +101,6 @@ void LibraryViewController::loadView() {
 
     // ── Header 与 Subheader 间的分隔线 ──
     auto headerSep = std::make_unique<ink::SeparatorView>();
-    headerSep->setLineColor(ink::Color::Light);
     headerSep->flexBasis_ = 1;
     view_->addSubview(std::move(headerSep));
 

@@ -51,6 +51,28 @@ public:
     }
 };
 
+/// 叠层根 View: 第一个子 View 铺满 bounds，后续子 View 在顶部叠加显示
+class OverlayRootView : public ink::View {
+public:
+    void onLayout() override {
+        const ink::Rect b = bounds();
+        for (size_t i = 0; i < subviews().size(); i++) {
+            auto& child = subviews()[i];
+            if (child->isHidden()) continue;
+            if (i == 0) {
+                // 底层内容铺满
+                child->setFrame(b);
+            } else {
+                // 浮层：全宽，高度由内容决定
+                ink::Size sz = child->intrinsicSize();
+                int h = (sz.h > 0) ? sz.h : 49;  // 48 header + 1 sep
+                child->setFrame({0, 0, b.w, h});
+            }
+            child->onLayout();
+        }
+    }
+};
+
 // ════════════════════════════════════════════════════════════════
 //  构造与析构
 // ════════════════════════════════════════════════════════════════
@@ -82,23 +104,15 @@ void ReaderViewController::loadView() {
 
     int margin = prefs_.margin;
 
-    // 根 View
-    view_ = std::make_unique<ink::View>();
+    // 根 View: 叠层布局（底层内容铺满，header 浮在上方）
+    view_ = std::make_unique<OverlayRootView>();
     view_->setBackgroundColor(ink::Color::White);
-    view_->flexStyle_.direction = ink::FlexDirection::Column;
-    view_->flexStyle_.alignItems = ink::Align::Stretch;
 
-    // 顶部 HeaderView（返回按钮 + 书名）
-    auto header = std::make_unique<ink::HeaderView>();
-    header->setFont(fontSmall);
-    header->setTitle(bookDisplayName());
-    header->setLeftIcon(UI_ICON_ARROW_LEFT.data, [this]() {
-        ESP_LOGI(TAG, "Back button tapped");
-        app_.navigator().pop();
-    });
-    header->flexBasis_ = 48;
-    headerView_ = header.get();
-    view_->addSubview(std::move(header));
+    // ── 底层：内容区域（Column 布局，铺满全屏）──
+    auto contentColumn = std::make_unique<ink::View>();
+    contentColumn->setBackgroundColor(ink::Color::White);
+    contentColumn->flexStyle_.direction = ink::FlexDirection::Column;
+    contentColumn->flexStyle_.alignItems = ink::Align::Stretch;
 
     // 文本内容区域（触摸三分区）
     auto touchView = std::make_unique<ReaderTouchView>();
@@ -111,13 +125,13 @@ void ReaderViewController::loadView() {
     touchView->onTapLeft_ = [this]() { prevPage(); };
     touchView->onTapRight_ = [this]() { nextPage(); };
     touchView->onTapMiddle_ = [this]() {
-        if (headerView_) {
-            bool show = headerView_->isHidden();
-            headerView_->setHidden(!show);
+        if (headerOverlay_) {
+            bool show = headerOverlay_->isHidden();
+            headerOverlay_->setHidden(!show);
             ESP_LOGI(TAG, "Header toggled: %s", show ? "visible" : "hidden");
-            if (auto* root = headerView_->parent()) {
-                root->setNeedsLayout();
-            }
+            // 触发根 View 重新布局和绘制
+            view()->setNeedsLayout();
+            view()->setNeedsDisplay();
         }
     };
 
@@ -131,7 +145,7 @@ void ReaderViewController::loadView() {
     contentView_ = content.get();
     touchView->addSubview(std::move(content));
 
-    view_->addSubview(std::move(touchView));
+    contentColumn->addSubview(std::move(touchView));
 
     // 底部页脚容器
     auto footer = std::make_unique<ink::View>();
@@ -141,8 +155,10 @@ void ReaderViewController::loadView() {
     footer->flexStyle_.padding = ink::Insets{4, static_cast<int>(margin), 4, static_cast<int>(margin)};
     footer->flexStyle_.alignItems = ink::Align::Center;
 
+    const EpdFont* fontFooter = ui_font_get(16);
+
     auto fLeft = std::make_unique<ink::TextLabel>();
-    fLeft->setFont(fontSmall);
+    fLeft->setFont(fontFooter);
     fLeft->setColor(ink::Color::Dark);
     fLeft->setAlignment(ink::Align::Start);
     fLeft->flexGrow_ = 1;
@@ -150,19 +166,45 @@ void ReaderViewController::loadView() {
     footer->addSubview(std::move(fLeft));
 
     auto fRight = std::make_unique<ink::TextLabel>();
-    fRight->setFont(fontSmall);
+    fRight->setFont(fontFooter);
     fRight->setColor(ink::Color::Dark);
     fRight->setAlignment(ink::Align::End);
     fRight->flexGrow_ = 1;
     footerRight_ = fRight.get();
     footer->addSubview(std::move(fRight));
 
-    view_->addSubview(std::move(footer));
+    contentColumn->addSubview(std::move(footer));
+    view_->addSubview(std::move(contentColumn));
 
-    // Header 默认隐藏，点击中间区域切换
-    if (headerView_) {
-        headerView_->setHidden(true);
-        ESP_LOGI(TAG, "Header initially hidden");
+    // ── 浮层：Header + 分隔线（叠加在内容上方）──
+    auto headerBar = std::make_unique<ink::View>();
+    headerBar->setBackgroundColor(ink::Color::White);
+    headerBar->flexStyle_.direction = ink::FlexDirection::Column;
+    headerBar->flexStyle_.alignItems = ink::Align::Stretch;
+
+    auto header = std::make_unique<ink::HeaderView>();
+    header->setFont(fontSmall);
+    header->setTitle(bookDisplayName());
+    header->setLeftIcon(UI_ICON_ARROW_LEFT.data, [this]() {
+        ESP_LOGI(TAG, "Back button tapped");
+        app_.navigator().pop();
+    });
+    header->flexBasis_ = 48;
+    headerView_ = header.get();
+    headerBar->addSubview(std::move(header));
+
+    auto headerSep = std::make_unique<ink::SeparatorView>();
+    headerSep->flexBasis_ = 1;
+    headerSep_ = headerSep.get();
+    headerBar->addSubview(std::move(headerSep));
+
+    headerOverlay_ = headerBar.get();
+    view_->addSubview(std::move(headerBar));
+
+    // Header 浮层默认隐藏
+    if (headerOverlay_) {
+        headerOverlay_->setHidden(true);
+        ESP_LOGI(TAG, "Header overlay initially hidden");
     }
 }
 
