@@ -79,7 +79,7 @@ void HeaderView::rebuild() {
     titleLabel_ = label.get();
     addSubview(std::move(label));
 
-    // 右侧按钮
+    // 右侧按钮（或占位 spacer 保持标题居中）
     if (rightIconData_) {
         auto btn = std::make_unique<ButtonView>();
         btn->setStyle(ButtonStyle::Icon);
@@ -88,6 +88,12 @@ void HeaderView::rebuild() {
         btn->flexBasis_ = kButtonSize;
         rightButton_ = btn.get();
         addSubview(std::move(btn));
+    } else if (leftIconData_) {
+        // 左侧有图标但右侧没有，添加同宽占位以保持标题居中
+        auto spacer = std::make_unique<View>();
+        spacer->setBackgroundColor(Color::White);
+        spacer->flexBasis_ = kButtonSize;
+        addSubview(std::move(spacer));
     }
 
     setNeedsLayout();
