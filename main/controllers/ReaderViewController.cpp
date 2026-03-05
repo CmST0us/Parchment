@@ -132,15 +132,6 @@ void ReaderViewController::loadView() {
             // 触发根 View 重新布局和绘制
             view()->setNeedsLayout();
             view()->setNeedsDisplay();
-
-            if (show) {
-                // 显示时启动 3 秒自动隐藏定时器
-                int timerId = kHeaderHideTimerBase + (++headerTimerGen_ & 0xFF);
-                app_.postDelayed(ink::Event::makeTimer(timerId), 3000);
-            } else {
-                // 手动隐藏时递增 generation 使旧 timer 失效
-                headerTimerGen_++;
-            }
         }
     };
 
@@ -236,7 +227,14 @@ void ReaderViewController::viewDidLoad() {
         return;
     }
 
-    // 设置文本源到 ReaderContentView
+    // 恢复阅读进度（必须在 setTextSource 之前，因为它会触发页索引加载）
+    reading_progress_t progress = {};
+    settings_store_load_progress(book_.path, &progress);
+    if (progress.byte_offset > 0) {
+        contentView_->setInitialByteOffset(progress.byte_offset);
+    }
+
+    // 设置文本源到 ReaderContentView（触发页索引加载/构建）
     contentView_->setTextSource(&textSource_);
     contentView_->setCacheDir(cacheDirPath_);
 
@@ -245,13 +243,6 @@ void ReaderViewController::viewDidLoad() {
         updateFooter();
         app_.postEvent(ink::Event::makeTimer(kStatusTimerId));
     });
-
-    // 恢复阅读进度
-    reading_progress_t progress = {};
-    settings_store_load_progress(book_.path, &progress);
-    if (progress.byte_offset > 0) {
-        contentView_->setInitialByteOffset(progress.byte_offset);
-    }
 
     // 设置页脚左侧书名
     if (footerLeft_) {
@@ -285,25 +276,6 @@ void ReaderViewController::handleEvent(const ink::Event& event) {
         } else if (event.swipe.direction == ink::SwipeDirection::Right) {
             prevPage();
         }
-    } else if (event.type == ink::EventType::Timer) {
-        // Header 自动隐藏定时器
-        int timerId = event.timer.timerId;
-        int expectedId = kHeaderHideTimerBase + (headerTimerGen_ & 0xFF);
-        if (timerId >= kHeaderHideTimerBase && timerId <= kHeaderHideTimerBase + 0xFF) {
-            if (timerId == expectedId) {
-                hideHeaderOverlay();
-            }
-            // 旧 generation 的 timer 静默忽略
-        }
-    }
-}
-
-void ReaderViewController::hideHeaderOverlay() {
-    if (headerOverlay_ && !headerOverlay_->isHidden()) {
-        headerOverlay_->setHidden(true);
-        view()->setNeedsLayout();
-        view()->setNeedsDisplay();
-        ESP_LOGI(TAG, "Header auto-hidden");
     }
 }
 

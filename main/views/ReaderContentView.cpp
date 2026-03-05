@@ -485,6 +485,7 @@ void ReaderContentView::doPaginate() {
             currentPage_ = static_cast<int>(
                 pageIndex_.findPage(initialByteOffset_));
             hasInitialByteOffset_ = false;
+            setNeedsDisplay();
             ESP_LOGI(TAG, "BG: Restored to page %d (offset %lu)",
                      currentPage_, (unsigned long)initialByteOffset_);
         }
@@ -532,6 +533,9 @@ void ReaderContentView::onDraw(ink::Canvas& canvas) {
     if (!paginateStarted_) {
         ensurePagination();
     }
+
+    // 等待进度恢复完成再渲染（避免闪现第 0 页）
+    if (hasInitialByteOffset_) return;
 
     // 获取当前页 offset
     uint32_t pageOffset;
