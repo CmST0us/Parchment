@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ink_ui/core/Geometry.h"
+#include "ink_ui/core/Profiler.h"
 #include "ink_ui/core/View.h"
 #include "ink_ui/hal/DisplayDriver.h"
 
@@ -40,6 +41,12 @@ private:
 
     DirtyEntry dirtyRegions_[MAX_DIRTY_REGIONS];
     int dirtyCount_ = 0;
+
+#ifdef CONFIG_INKUI_PROFILE
+    int64_t profClearUs_ = 0;    ///< canvas.clear() 累计耗时
+    int64_t profOnDrawUs_ = 0;   ///< view->onDraw() 累计耗时
+    int profViewCount_ = 0;      ///< 绘制的 View 数量
+#endif
 
     // Phase 1: Layout
     void layoutPass(View* rootView);

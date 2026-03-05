@@ -1,0 +1,9 @@
+menu "InkUI Configuration"
+    config INKUI_PROFILE
+        bool "Enable InkUI performance profiling"
+        default n
+        help
+            Enable profiling instrumentation in InkUI rendering pipeline.
+            Outputs per-stage timing to serial log via ESP_LOGI.
+            When disabled, all profiling macros compile to nothing.
+endmenu

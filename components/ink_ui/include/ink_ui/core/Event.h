@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "sdkconfig.h"
+
 #include <cstdint>
 
 namespace ink {
@@ -64,6 +66,10 @@ struct Event {
         TimerEvent timer;
         int32_t customParam;
     };
+
+#ifdef CONFIG_INKUI_PROFILE
+    int64_t timestampUs = 0;  ///< 事件创建时刻 (profiling only)
+#endif
 
     /// 创建触摸事件
     static Event makeTouch(const TouchEvent& te) {

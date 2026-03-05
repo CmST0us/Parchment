@@ -111,6 +111,9 @@ private:
     static constexpr int kFbPhysWidth  = 960;
     static constexpr int kFbPhysHeight = 540;
 
+    /// 快速填充屏幕绝对坐标矩形（已裁剪，行级 memset）
+    void fillAbsRect(int ax0, int ay0, int ax1, int ay1, uint8_t gray);
+
     /// 写入单个像素（屏幕绝对逻辑坐标，含裁剪检查和坐标变换）
     void setPixel(int absX, int absY, uint8_t gray);
 

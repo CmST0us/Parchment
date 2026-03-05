@@ -6,6 +6,7 @@
 #include "ink_ui/core/Application.h"
 #include "ink_ui/core/Canvas.h"
 #include "ink_ui/core/ModalPresenter.h"
+#include "ink_ui/core/Profiler.h"
 #include "ink_ui/views/StatusBarView.h"
 
 #include <cstdio>
@@ -184,8 +185,37 @@ void Application::run() {
         bool received = platform_->queueReceive(
             eventQueue_, &event, kQueueTimeoutMs);
 
+#ifdef CONFIG_INKUI_PROFILE
+        int64_t dispatchStartUs = 0;
+        int64_t dispatchEndUs = 0;
+        int64_t eventTimestampUs = 0;
+        const char* eventTypeName = nullptr;
+#endif
+
         if (received) {
+#ifdef CONFIG_INKUI_PROFILE
+            dispatchStartUs = INKUI_PROFILE_NOW();
+            eventTimestampUs = event.timestampUs;
+            switch (event.type) {
+                case EventType::Touch:
+                    switch (event.touch.type) {
+                        case TouchType::Tap:       eventTypeName = "Tap"; break;
+                        case TouchType::LongPress:  eventTypeName = "LongPress"; break;
+                        case TouchType::Down:       eventTypeName = "Down"; break;
+                        case TouchType::Move:       eventTypeName = "Move"; break;
+                        case TouchType::Up:         eventTypeName = "Up"; break;
+                    }
+                    break;
+                case EventType::Swipe:  eventTypeName = "Swipe"; break;
+                case EventType::Timer:  eventTypeName = "Timer"; break;
+                case EventType::Custom: eventTypeName = "Custom"; break;
+            }
+#endif
             dispatchEvent(event);
+
+#ifdef CONFIG_INKUI_PROFILE
+            dispatchEndUs = INKUI_PROFILE_NOW();
+#endif
         }
 
         // 检查时间和电池更新
@@ -211,6 +241,22 @@ void Application::run() {
         if (screenRoot_) {
             renderEngine_->renderCycle(screenRoot_.get());
         }
+
+#ifdef CONFIG_INKUI_PROFILE
+        if (received && eventTypeName) {
+            int64_t nowUs = INKUI_PROFILE_NOW();
+            int dispatchMs = (int)((dispatchEndUs - dispatchStartUs) / 1000);
+            int totalMs = (int)((nowUs - dispatchStartUs) / 1000);
+            if (eventTimestampUs > 0) {
+                int latencyMs = (int)((nowUs - eventTimestampUs) / 1000);
+                INKUI_PROFILE_LOG("PERF", "event: type=%s touch->done=%dms dispatch=%dms render=%dms",
+                    eventTypeName, latencyMs, dispatchMs, totalMs - dispatchMs);
+            } else {
+                INKUI_PROFILE_LOG("PERF", "event: type=%s dispatch=%dms render=%dms total=%dms",
+                    eventTypeName, dispatchMs, totalMs - dispatchMs, totalMs);
+            }
+        }
+#endif
     }
 }
 

@@ -7,6 +7,7 @@
 
 #include "ink_ui/core/RenderEngine.h"
 #include "ink_ui/core/Canvas.h"
+#include "ink_ui/core/Profiler.h"
 
 #include <cstdio>
 
@@ -31,21 +32,51 @@ void RenderEngine::renderCycle(View* rootView) {
     if (!rootView) return;
 
     // Phase 1: Layout Pass
+    INKUI_PROFILE_BEGIN(layout);
     layoutPass(rootView);
+    INKUI_PROFILE_END(layout);
 
     // Phase 2: Collect Dirty
+    INKUI_PROFILE_BEGIN(collect);
     dirtyCount_ = 0;
     collectDirty(rootView);
+    INKUI_PROFILE_END(collect);
 
     if (dirtyCount_ == 0) {
         return;  // 无脏区域，跳过 Phase 3-5
     }
 
     // Phase 3: Draw Dirty
+#ifdef CONFIG_INKUI_PROFILE
+    profClearUs_ = 0;
+    profOnDrawUs_ = 0;
+    profViewCount_ = 0;
+#endif
+
+    INKUI_PROFILE_BEGIN(draw);
     drawDirty(rootView);
+    INKUI_PROFILE_END(draw);
 
     // Phase 4: Flush
+    INKUI_PROFILE_BEGIN(flush);
     flush();
+    INKUI_PROFILE_END(flush);
+
+#ifdef CONFIG_INKUI_PROFILE
+    int maxW = 0, maxH = 0;
+    for (int i = 0; i < dirtyCount_; i++) {
+        if (dirtyRegions_[i].rect.w > maxW) maxW = dirtyRegions_[i].rect.w;
+        if (dirtyRegions_[i].rect.h > maxH) maxH = dirtyRegions_[i].rect.h;
+    }
+    INKUI_PROFILE_LOG("PERF", "cycle: layout=%dms collect=%dms draw=%dms flush=%dms total=%dms dirty=%d (%dx%d)",
+        INKUI_PROFILE_MS(layout), INKUI_PROFILE_MS(collect),
+        INKUI_PROFILE_MS(draw), INKUI_PROFILE_MS(flush),
+        INKUI_PROFILE_MS(layout) + INKUI_PROFILE_MS(collect) +
+        INKUI_PROFILE_MS(draw) + INKUI_PROFILE_MS(flush),
+        dirtyCount_, maxW, maxH);
+    INKUI_PROFILE_LOG("PERF", "  draw: clear=%dms onDraw=%dms views=%d",
+        (int)(profClearUs_ / 1000), (int)(profOnDrawUs_ / 1000), profViewCount_);
+#endif
 }
 
 // ── Phase 1: Layout Pass ──
@@ -85,6 +116,10 @@ void RenderEngine::drawView(View* view, bool forced) {
     if (shouldDraw) {
         Rect sf = view->screenFrame();
         Canvas canvas(fb_, sf);
+
+#ifdef CONFIG_INKUI_PROFILE
+        int64_t clearStart = INKUI_PROFILE_NOW();
+#endif
         if (view->backgroundColor() != Color::Clear) {
             canvas.clear(view->backgroundColor());
         } else if (!forced && view->isOpaque()) {
@@ -99,7 +134,18 @@ void RenderEngine::drawView(View* view, bool forced) {
             }
             canvas.clear(inheritedBg);
         }
+#ifdef CONFIG_INKUI_PROFILE
+        int64_t clearEnd = INKUI_PROFILE_NOW();
+        profClearUs_ += (clearEnd - clearStart);
+
+        int64_t drawStart = INKUI_PROFILE_NOW();
+#endif
         view->onDraw(canvas);
+#ifdef CONFIG_INKUI_PROFILE
+        int64_t drawEnd = INKUI_PROFILE_NOW();
+        profOnDrawUs_ += (drawEnd - drawStart);
+        profViewCount_++;
+#endif
 
         // 强制重绘所有子 View（父 View 的 clear 覆盖了子 View 区域）
         for (auto& child : view->subviews()) {

@@ -7,6 +7,7 @@
  */
 
 #include "ink_ui/core/GestureRecognizer.h"
+#include "ink_ui/core/Profiler.h"
 
 #include <cstdio>
 
@@ -192,7 +193,13 @@ void GestureRecognizer::onRelease() {
 // ── 事件发送 ──
 
 void GestureRecognizer::sendEvent(const Event& event) {
+#ifdef CONFIG_INKUI_PROFILE
+    Event stamped = event;
+    stamped.timestampUs = platform_.getTimeUs();
+    platform_.queueSend(eventQueue_, &stamped, 10);
+#else
     platform_.queueSend(eventQueue_, &event, 10);
+#endif
 }
 
 } // namespace ink

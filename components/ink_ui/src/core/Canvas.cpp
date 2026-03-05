@@ -7,6 +7,7 @@
  */
 
 #include "ink_ui/core/Canvas.h"
+#include "ink_ui/core/Profiler.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -32,6 +33,52 @@ Canvas Canvas::clipped(const Rect& subRect) const {
     // 取交集
     Rect newClip = clip_.intersection(absRect);
     return Canvas(fb_, newClip);
+}
+
+// ============================================================================
+//  快速矩形填充 (private)
+// ============================================================================
+
+void Canvas::fillAbsRect(int ax0, int ay0, int ax1, int ay1, uint8_t gray) {
+    // 屏幕边界裁剪（ax 是逻辑 x，范围 0-539; ay 是逻辑 y，范围 0-959）
+    if (ax0 < 0) ax0 = 0;
+    if (ay0 < 0) ay0 = 0;
+    if (ax1 > kFbPhysHeight) ax1 = kFbPhysHeight;  // 540
+    if (ay1 > kFbPhysWidth) ay1 = kFbPhysWidth;    // 960
+    if (ax0 >= ax1 || ay0 >= ay1) return;
+
+    // 物理坐标范围
+    // px = ly → px range: [ay0, ay1)
+    // py = 539 - lx → py range: [540-ax1, 540-ax0)
+    int px_start = ay0;
+    int px_end = ay1;
+    int py_start = kFbPhysHeight - ax1;
+    int py_end = kFbPhysHeight - ax0;
+
+    uint8_t fill_byte = (gray >> 4) | (gray & 0xF0);
+
+    for (int py = py_start; py < py_end; py++) {
+        int base = py * (kFbPhysWidth / 2);
+        int ps = px_start;
+        int pe = px_end;
+
+        // 处理起始未对齐 nibble（奇数 px → 高 nibble）
+        if (ps & 1) {
+            fb_[base + ps / 2] = (fb_[base + ps / 2] & 0x0F) | (gray & 0xF0);
+            ps++;
+        }
+
+        // 处理结束未对齐 nibble（奇数 pe → 最后一个像素 pe-1 是偶数 → 低 nibble）
+        if (pe & 1) {
+            pe--;
+            fb_[base + pe / 2] = (fb_[base + pe / 2] & 0xF0) | (gray >> 4);
+        }
+
+        // 中间对齐区域 memset
+        if (ps < pe) {
+            memset(&fb_[base + ps / 2], fill_byte, (pe - ps) / 2);
+        }
+    }
 }
 
 // ============================================================================
@@ -85,11 +132,18 @@ void Canvas::clear(uint8_t gray) {
     if (clip_.isEmpty() || !fb_) {
         return;
     }
-    for (int ay = clip_.y; ay < clip_.bottom(); ay++) {
-        for (int ax = clip_.x; ax < clip_.right(); ax++) {
-            setPixel(ax, ay, gray);
-        }
+#ifdef CONFIG_INKUI_PROFILE
+    int pixels = clip_.w * clip_.h;
+    INKUI_PROFILE_BEGIN(clear);
+#endif
+    fillAbsRect(clip_.x, clip_.y, clip_.right(), clip_.bottom(), gray);
+#ifdef CONFIG_INKUI_PROFILE
+    INKUI_PROFILE_END(clear);
+    if (INKUI_PROFILE_MS(clear) > 5) {
+        INKUI_PROFILE_LOG("PERF", "    canvas.clear: %dx%d=%dpx time=%dms",
+            clip_.w, clip_.h, pixels, INKUI_PROFILE_MS(clear));
     }
+#endif
 }
 
 // ============================================================================
@@ -101,41 +155,18 @@ void Canvas::fillRect(const Rect& rect, uint8_t gray) {
         return;
     }
 
-    // 局部坐标 → 屏幕绝对坐标
+    // 局部坐标 → 绝对坐标 + clip 裁剪
     int ax0 = clip_.x + rect.x;
     int ay0 = clip_.y + rect.y;
     int ax1 = ax0 + rect.w;
     int ay1 = ay0 + rect.h;
 
-    // 与 clip 取交集
     if (ax0 < clip_.x) ax0 = clip_.x;
     if (ay0 < clip_.y) ay0 = clip_.y;
     if (ax1 > clip_.right()) ax1 = clip_.right();
     if (ay1 > clip_.bottom()) ay1 = clip_.bottom();
 
-    // 屏幕边界裁剪
-    if (ax0 < 0) ax0 = 0;
-    if (ay0 < 0) ay0 = 0;
-    if (ax1 > 540) ax1 = 540;
-    if (ay1 > 960) ay1 = 960;
-
-    if (ax0 >= ax1 || ay0 >= ay1) {
-        return;
-    }
-
-    for (int ay = ay0; ay < ay1; ay++) {
-        for (int ax = ax0; ax < ax1; ax++) {
-            // 直接写入，跳过 setPixel 的冗余检查
-            int px = ay;
-            int py = (kFbPhysHeight - 1) - ax;
-            uint8_t* buf_ptr = &fb_[py * (kFbPhysWidth / 2) + px / 2];
-            if (px & 1) {
-                *buf_ptr = (*buf_ptr & 0x0F) | (gray & 0xF0);
-            } else {
-                *buf_ptr = (*buf_ptr & 0xF0) | (gray >> 4);
-            }
-        }
-    }
+    fillAbsRect(ax0, ay0, ax1, ay1, gray);
 }
 
 void Canvas::drawRect(const Rect& rect, uint8_t gray, int thickness) {
@@ -438,11 +469,27 @@ void Canvas::drawText(const EpdFont* font, const char* text,
     int cursorX = clip_.x + x;
     int cursorY = clip_.y + y;
 
+#ifdef CONFIG_INKUI_PROFILE
+    INKUI_PROFILE_BEGIN(text);
+    int charCount = 0;
+#endif
+
     uint32_t cp;
     while ((cp = nextCodepoint(&text)) != 0) {
         if (cp == '\n') break;
         drawChar(font, cp, &cursorX, cursorY, color);
+#ifdef CONFIG_INKUI_PROFILE
+        charCount++;
+#endif
     }
+
+#ifdef CONFIG_INKUI_PROFILE
+    INKUI_PROFILE_END(text);
+    if (INKUI_PROFILE_MS(text) > 2) {
+        INKUI_PROFILE_LOG("PERF", "    canvas.drawText: %d chars time=%dms",
+            charCount, INKUI_PROFILE_MS(text));
+    }
+#endif
 }
 
 void Canvas::drawTextN(const EpdFont* font, const char* text, int maxBytes,

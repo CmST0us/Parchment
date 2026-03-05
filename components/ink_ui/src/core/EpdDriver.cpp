@@ -6,6 +6,7 @@
  */
 
 #include "ink_ui/core/EpdDriver.h"
+#include "ink_ui/core/Profiler.h"
 
 extern "C" {
 #include "epdiy.h"
@@ -47,7 +48,26 @@ bool EpdDriver::updateArea(int x, int y, int w, int h, RefreshMode mode) {
         return false;
     }
     int epdiyMode = static_cast<int>(toEpdMode(mode));
-    return epd_driver_update_area_mode(x, y, w, h, epdiyMode) == ESP_OK;
+
+#ifdef CONFIG_INKUI_PROFILE
+    const char* modeName = "?";
+    switch (mode) {
+        case RefreshMode::Full:  modeName = "GL16"; break;
+        case RefreshMode::Fast:  modeName = "DU"; break;
+        case RefreshMode::Clear: modeName = "GC16"; break;
+    }
+    INKUI_PROFILE_BEGIN(epd);
+#endif
+
+    bool ok = epd_driver_update_area_mode(x, y, w, h, epdiyMode) == ESP_OK;
+
+#ifdef CONFIG_INKUI_PROFILE
+    INKUI_PROFILE_END(epd);
+    INKUI_PROFILE_LOG("PERF", "  epd: area=(%d,%d,%d,%d) mode=%s time=%dms",
+        x, y, w, h, modeName, INKUI_PROFILE_MS(epd));
+#endif
+
+    return ok;
 }
 
 bool EpdDriver::updateArea(const Rect& physicalArea, EpdMode mode) {
