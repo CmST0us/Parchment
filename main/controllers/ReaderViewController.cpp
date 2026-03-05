@@ -132,6 +132,15 @@ void ReaderViewController::loadView() {
             // 触发根 View 重新布局和绘制
             view()->setNeedsLayout();
             view()->setNeedsDisplay();
+
+            if (show) {
+                // 显示时启动 3 秒自动隐藏定时器
+                int timerId = kHeaderHideTimerBase + (++headerTimerGen_ & 0xFF);
+                app_.postDelayed(ink::Event::makeTimer(timerId), 3000);
+            } else {
+                // 手动隐藏时递增 generation 使旧 timer 失效
+                headerTimerGen_++;
+            }
         }
     };
 
@@ -276,6 +285,25 @@ void ReaderViewController::handleEvent(const ink::Event& event) {
         } else if (event.swipe.direction == ink::SwipeDirection::Right) {
             prevPage();
         }
+    } else if (event.type == ink::EventType::Timer) {
+        // Header 自动隐藏定时器
+        int timerId = event.timer.timerId;
+        int expectedId = kHeaderHideTimerBase + (headerTimerGen_ & 0xFF);
+        if (timerId >= kHeaderHideTimerBase && timerId <= kHeaderHideTimerBase + 0xFF) {
+            if (timerId == expectedId) {
+                hideHeaderOverlay();
+            }
+            // 旧 generation 的 timer 静默忽略
+        }
+    }
+}
+
+void ReaderViewController::hideHeaderOverlay() {
+    if (headerOverlay_ && !headerOverlay_->isHidden()) {
+        headerOverlay_->setHidden(true);
+        view()->setNeedsLayout();
+        view()->setNeedsDisplay();
+        ESP_LOGI(TAG, "Header auto-hidden");
     }
 }
 
@@ -329,6 +357,11 @@ void ReaderViewController::nextPage() {
         if (view()) view()->setRefreshHint(ink::RefreshHint::Quality);
     }
 
+    // 翻页后 header 浮层需要重绘（内容重绘会覆盖其区域）
+    if (headerOverlay_ && !headerOverlay_->isHidden()) {
+        headerOverlay_->setNeedsDisplay();
+    }
+
     updateFooter();
 }
 
@@ -346,6 +379,11 @@ void ReaderViewController::prevPage() {
         if (view()) view()->setRefreshHint(ink::RefreshHint::Full);
     } else {
         if (view()) view()->setRefreshHint(ink::RefreshHint::Quality);
+    }
+
+    // 翻页后 header 浮层需要重绘（内容重绘会覆盖其区域）
+    if (headerOverlay_ && !headerOverlay_->isHidden()) {
+        headerOverlay_->setNeedsDisplay();
     }
 
     updateFooter();

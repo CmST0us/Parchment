@@ -63,5 +63,10 @@ private:
     /// 获取书名（不含 .txt 后缀）
     std::string bookDisplayName() const;
 
-    static constexpr int kStatusTimerId = 100;  ///< 状态更新唤醒定时器（仅用于唤醒事件循环）
+    /// 隐藏 header 浮层（自动隐藏回调）
+    void hideHeaderOverlay();
+
+    static constexpr int kStatusTimerId = 100;      ///< 状态更新唤醒定时器
+    static constexpr int kHeaderHideTimerBase = 200; ///< Header 自动隐藏定时器基址
+    int headerTimerGen_ = 0;                         ///< Header timer generation（防 stale）
 };
