@@ -22,6 +22,9 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # Log level: Info
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 
+# Main task stack size (default 3584 too small for deep view tree)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
 # FreeRTOS tick rate
 CONFIG_FREERTOS_HZ=1000
 
