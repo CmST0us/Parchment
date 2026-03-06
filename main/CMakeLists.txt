@@ -3,6 +3,7 @@ idf_component_register(
          "controllers/BootViewController.cpp"
          "controllers/LibraryViewController.cpp"
          "controllers/ReaderViewController.cpp"
+         "controllers/EpdTestViewController.cpp"
          "views/BootLogoView.cpp"
          "views/BookCoverView.cpp"
          "views/ReaderContentView.cpp"

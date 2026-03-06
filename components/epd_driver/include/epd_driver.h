@@ -102,15 +102,25 @@ void epd_driver_draw_pixel(int x, int y, uint8_t color);
 void epd_driver_fill_rect(int x, int y, int w, int h, uint8_t color);
 
 /**
- * @brief 两步刷新：先快速刷黑，再显示目标内容。
+ * @brief 快速 GL16 全屏刷新（灰度版 DU）。
  *
- * 利用 MODE_DU 快速将屏幕刷黑，然后用 MODE_GL16 从纯黑状态
- * 过渡到目标内容。由于起始状态为纯黑，GL16 的"先驱黑"阶段
- * 不产生可见变化，消除闪烁感。
+ * 使用自定义 15 相位波形，覆盖所有 from→to 灰度过渡。
+ * 速度接近 DU，支持 16 级灰度，无闪烁。
  *
  * @return ESP_OK 成功。
  */
-esp_err_t epd_driver_update_screen_black_flash(void);
+esp_err_t epd_driver_update_screen_fast_gl16(void);
+
+/**
+ * @brief 快速 GL16 局部刷新（灰度版 DU）。
+ *
+ * @param x      区域左上角 X 坐标（物理坐标）。
+ * @param y      区域左上角 Y 坐标（物理坐标）。
+ * @param w      区域宽度。
+ * @param h      区域高度。
+ * @return ESP_OK 成功。
+ */
+esp_err_t epd_driver_update_area_fast_gl16(int x, int y, int w, int h);
 
 /**
  * @brief 将帧缓冲区全部设为白色（不刷新屏幕）。

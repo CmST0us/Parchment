@@ -9,6 +9,7 @@
 
 #include "controllers/LibraryViewController.h"
 #include "controllers/ReaderViewController.h"
+#include "controllers/EpdTestViewController.h"
 #include "views/BookCoverView.h"
 
 extern "C" {
@@ -57,22 +58,9 @@ void LibraryViewController::loadView() {
     header->setFont(fontLarge);
     header->setTitle("Parchment");
     header->setLeftIcon(UI_ICON_MENU.data, [this]() {
-        ESP_LOGI("LibraryVC", "Menu tapped — showing test Alert");
-
-        auto alert = std::make_unique<ink::AlertView>();
-        alert->setFont(ui_font_get(20));
-        alert->setTitleFont(ui_font_get(24));
-        alert->setTitle("Test Alert");
-        alert->setMessage("Modal presenter is working!");
-        alert->addButton("取消", [this]() {
-            app_.modalPresenter().dismiss(ink::ModalChannel::Modal);
-        });
-        alert->addButton("确定", [this]() {
-            ESP_LOGI("LibraryVC", "Alert confirmed");
-            app_.modalPresenter().dismiss(ink::ModalChannel::Modal);
-        }, true);
-
-        app_.modalPresenter().showAlert(std::move(alert));
+        ESP_LOGI("LibraryVC", "Menu tapped — push EPD Test page");
+        auto testVC = std::make_unique<EpdTestViewController>(app_);
+        app_.navigator().push(std::move(testVC));
     });
     header->setRightIcon(UI_ICON_SETTINGS.data, [this]() {
         ESP_LOGI("LibraryVC", "Settings tapped — showing Sheet");
