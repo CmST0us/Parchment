@@ -1,13 +1,13 @@
 /**
  * @file EpdTestViewController.h
- * @brief EPD 刷新调节测试页面。
+ * @brief EPD 刷新模式测试页面。
  */
 
 #pragma once
 
 #include "ink_ui/InkUI.h"
 
-/// EPD 刷新调节与测试页面
+/// EPD 刷新模式测试页面
 class EpdTestViewController : public ink::ViewController {
 public:
     explicit EpdTestViewController(ink::Application& app);
@@ -29,16 +29,9 @@ private:
     // ── View 引用（非持有） ──
     TestPatternView* testView_ = nullptr;
     ink::TextLabel* infoLabel_ = nullptr;
-    ink::TextLabel* phaseCountLabel_ = nullptr;
 
-    // ── 状态 ──
-    int numPhases_ = 15;
-
-    // ── 操作方法 ──
-    void setPhaseCount(int count);
-    void updatePhaseCountDisplay();
-
+    // ── 刷新操作 ──
     void refreshTestArea(int epdiyMode, const char* modeName);
-    void fastGL16Refresh();
     void whiteDuThenGL16Refresh();
+    void whiteBlackDuThenGL16Refresh();
 };

@@ -102,44 +102,6 @@ void epd_driver_draw_pixel(int x, int y, uint8_t color);
 void epd_driver_fill_rect(int x, int y, int w, int h, uint8_t color);
 
 /**
- * @brief 快速 GL16 全屏刷新（灰度版 DU）。
- *
- * 使用自定义 15 相位波形，覆盖所有 from→to 灰度过渡。
- * 速度接近 DU，支持 16 级灰度，无闪烁。
- *
- * @return ESP_OK 成功。
- */
-esp_err_t epd_driver_update_screen_fast_gl16(void);
-
-/**
- * @brief 快速 GL16 局部刷新（灰度版 DU）。
- *
- * @param x      区域左上角 X 坐标（物理坐标）。
- * @param y      区域左上角 Y 坐标（物理坐标）。
- * @param w      区域宽度。
- * @param h      区域高度。
- * @return ESP_OK 成功。
- */
-esp_err_t epd_driver_update_area_fast_gl16(int x, int y, int w, int h);
-
-/**
- * @brief 设置 Fast GL16 波形的 phase 数量并重建 LUT。
- *
- * 每个 phase 在 LCD 模式下固定约 8ms，
- * 因此 draw_time ≈ num_phases × 8ms。
- * 范围: 1~15。更多 phase = 更好灰度但更慢。
- *
- * @param num_phases phase 数量（1~15）。
- */
-void epd_driver_set_fast_gl16_phases(int num_phases);
-
-/**
- * @brief 获取当前 Fast GL16 的 phase 数量。
- * @return 当前 phase 数量。
- */
-int epd_driver_get_fast_gl16_phases(void);
-
-/**
  * @brief 白 DU → GL16 全屏切换。
  *
  * 第一步用 MODE_DU 快速将屏幕刷白，
@@ -148,6 +110,18 @@ int epd_driver_get_fast_gl16_phases(void);
  * @return ESP_OK 成功。
  */
 esp_err_t epd_driver_white_du_then_gl16(void);
+
+/**
+ * @brief 白 DU → 黑 DU → GL16 全屏切换。
+ *
+ * 第一步用 MODE_DU 快速将屏幕刷白，
+ * 第二步用 MODE_DU 快速将屏幕刷黑，
+ * 第三步用 MODE_GL16 从纯黑显示目标内容。
+ * 通过白→黑两步彻底消除残影。
+ *
+ * @return ESP_OK 成功。
+ */
+esp_err_t epd_driver_white_black_du_then_gl16(void);
 
 /**
  * @brief 将帧缓冲区全部设为白色（不刷新屏幕）。

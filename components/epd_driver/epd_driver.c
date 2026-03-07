@@ -16,69 +16,6 @@ static EpdiyHighlevelState s_hl_state;
 static uint8_t *s_framebuffer = NULL;
 static bool s_initialized = false;
 
-/* ── 快速 GL16 波形（灰度版 DU）──
- *
- * 可调相位数（1~15），运行时生成 LUT 覆盖所有 16×16 from→to 灰度组合。
- * Phase p 中：|delta| > p 的像素施加 lighten/darken，其余不操作。
- *
- * 注意: ESP32-S3 LCD 模式下 phase_times 被硬件忽略，
- * 每个 phase 固定约 8ms，因此 draw_time ≈ num_phases × 8ms。
- */
-#define FAST_GL16_MAX_PHASES 15
-static int s_fast_gl16_num_phases = 15;
-static const EpdWaveformTempInterval s_fast_gl16_temp[1] = {
-    { .min = 0, .max = 50 }
-};
-static uint8_t s_fast_gl16_data[FAST_GL16_MAX_PHASES][16][4];
-static EpdWaveformPhases s_fast_gl16_phases;
-static const EpdWaveformPhases *s_fast_gl16_ranges[1];
-static EpdWaveformMode s_fast_gl16_mode;
-static const EpdWaveformMode *s_fast_gl16_modes[1];
-static EpdWaveform s_fast_gl16_waveform;
-
-static void rebuild_fast_gl16_waveform(void) {
-    int n = s_fast_gl16_num_phases;
-
-    /* 生成 LUT: 对每个 (phase, to, from) 计算 lighten/darken/nothing */
-    for (int p = 0; p < n; p++) {
-        for (int t = 0; t < 16; t++) {
-            for (int bi = 0; bi < 4; bi++) {
-                uint8_t byte_val = 0;
-                for (int fi = 0; fi < 4; fi++) {
-                    int f = bi * 4 + fi;
-                    int delta = t - f;
-                    uint8_t action = 0;
-                    if (delta > 0 && p < delta)
-                        action = 2;  /* lighten */
-                    else if (delta < 0 && p < -delta)
-                        action = 1;  /* darken */
-                    byte_val |= (action << (6 - 2 * fi));
-                }
-                s_fast_gl16_data[p][t][bi] = byte_val;
-            }
-        }
-    }
-
-    /* 组装波形结构体 */
-    s_fast_gl16_phases.phases = n;
-    s_fast_gl16_phases.phase_times = NULL;  /* LCD 模式忽略此值 */
-    s_fast_gl16_phases.luts = (const uint8_t *)s_fast_gl16_data;
-
-    s_fast_gl16_ranges[0] = &s_fast_gl16_phases;
-
-    s_fast_gl16_mode.type = 5;  /* MODE_GL16 */
-    s_fast_gl16_mode.temp_ranges = 1;
-    s_fast_gl16_mode.range_data = s_fast_gl16_ranges;
-
-    s_fast_gl16_modes[0] = &s_fast_gl16_mode;
-
-    s_fast_gl16_waveform.num_modes = 1;
-    s_fast_gl16_waveform.num_temp_ranges = 1;
-    s_fast_gl16_waveform.mode_data = s_fast_gl16_modes;
-    s_fast_gl16_waveform.temp_intervals = s_fast_gl16_temp;
-}
-
-
 esp_err_t epd_driver_init(void) {
     if (s_initialized) {
         ESP_LOGW(TAG, "EPD driver already initialized");
@@ -108,9 +45,6 @@ esp_err_t epd_driver_init(void) {
     epd_fullclear(&s_hl_state, 25);
     epd_poweroff();
     ESP_LOGI(TAG, "epd_fullclear done");
-
-    /* 生成快速 GL16 波形 LUT */
-    rebuild_fast_gl16_waveform();
 
     s_initialized = true;
     ESP_LOGI(TAG, "EPD driver initialized successfully");
@@ -193,68 +127,10 @@ void epd_driver_fill_rect(int x, int y, int w, int h, uint8_t color) {
     }
 }
 
-esp_err_t epd_driver_update_screen_fast_gl16(void) {
-    if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    /* 临时切换到快速 GL16 波形 */
-    const EpdWaveform *original = s_hl_state.waveform;
-    s_hl_state.waveform = &s_fast_gl16_waveform;
-
-    epd_poweron();
-    enum EpdDrawError err = epd_hl_update_screen(&s_hl_state, MODE_GL16, 25);
-    epd_poweroff();
-
-    /* 恢复原始波形 */
-    s_hl_state.waveform = original;
-
-    if (err != EPD_DRAW_SUCCESS) {
-        ESP_LOGE(TAG, "Fast GL16 update failed: %d", err);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
-esp_err_t epd_driver_update_area_fast_gl16(int x, int y, int w, int h) {
-    if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    EpdRect area = {.x = x, .y = y, .width = w, .height = h};
-
-    const EpdWaveform *original = s_hl_state.waveform;
-    s_hl_state.waveform = &s_fast_gl16_waveform;
-
-    epd_poweron();
-    enum EpdDrawError err = epd_hl_update_area(&s_hl_state, MODE_GL16, 25, area);
-    epd_poweroff();
-
-    s_hl_state.waveform = original;
-
-    if (err != EPD_DRAW_SUCCESS) {
-        ESP_LOGE(TAG, "Fast GL16 area update failed: %d", err);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
 void epd_driver_set_all_white(void) {
     if (s_initialized) {
         epd_hl_set_all_white(&s_hl_state);
     }
-}
-
-void epd_driver_set_fast_gl16_phases(int num_phases) {
-    if (num_phases < 1) num_phases = 1;
-    if (num_phases > FAST_GL16_MAX_PHASES) num_phases = FAST_GL16_MAX_PHASES;
-    s_fast_gl16_num_phases = num_phases;
-    rebuild_fast_gl16_waveform();
-    ESP_LOGI(TAG, "Fast GL16 phases set to %d (~%dms)", num_phases, num_phases * 8);
-}
-
-int epd_driver_get_fast_gl16_phases(void) {
-    return s_fast_gl16_num_phases;
 }
 
 esp_err_t epd_driver_white_du_then_gl16(void) {
@@ -285,6 +161,59 @@ esp_err_t epd_driver_white_du_then_gl16(void) {
     }
 
     /* 第二步：GL16 显示目标内容 */
+    memcpy(s_framebuffer, target, fb_size);
+    err = epd_hl_update_screen(&s_hl_state, MODE_GL16, 25);
+    epd_poweroff();
+
+    heap_caps_free(target);
+
+    if (err != EPD_DRAW_SUCCESS) {
+        ESP_LOGE(TAG, "GL16 target step failed: %d", err);
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+esp_err_t epd_driver_white_black_du_then_gl16(void) {
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int fb_size = epd_width() / 2 * epd_height();
+
+    /* 保存目标帧内容 */
+    uint8_t *target = (uint8_t *)heap_caps_malloc(fb_size, MALLOC_CAP_SPIRAM);
+    if (target == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate temp buffer for W>B>GL16");
+        return ESP_ERR_NO_MEM;
+    }
+    memcpy(target, s_framebuffer, fb_size);
+
+    epd_poweron();
+
+    /* 第一步：DU 快速刷白 */
+    memset(s_framebuffer, 0xFF, fb_size);
+    enum EpdDrawError err = epd_hl_update_screen(&s_hl_state, MODE_DU, 25);
+    if (err != EPD_DRAW_SUCCESS) {
+        ESP_LOGE(TAG, "White DU step failed: %d", err);
+        memcpy(s_framebuffer, target, fb_size);
+        heap_caps_free(target);
+        epd_poweroff();
+        return ESP_FAIL;
+    }
+
+    /* 第二步：DU 快速刷黑 */
+    memset(s_framebuffer, 0x00, fb_size);
+    err = epd_hl_update_screen(&s_hl_state, MODE_DU, 25);
+    if (err != EPD_DRAW_SUCCESS) {
+        ESP_LOGE(TAG, "Black DU step failed: %d", err);
+        memcpy(s_framebuffer, target, fb_size);
+        heap_caps_free(target);
+        epd_poweroff();
+        return ESP_FAIL;
+    }
+
+    /* 第三步：GL16 显示目标内容 */
     memcpy(s_framebuffer, target, fb_size);
     err = epd_hl_update_screen(&s_hl_state, MODE_GL16, 25);
     epd_poweroff();
