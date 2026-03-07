@@ -123,6 +123,28 @@ esp_err_t epd_driver_update_screen_fast_gl16(void);
 esp_err_t epd_driver_update_area_fast_gl16(int x, int y, int w, int h);
 
 /**
+ * @brief 设置 Fast GL16 波形的 phase_times（运行时可调）。
+ * @param times 15 个 phase 时间值的数组。
+ */
+void epd_driver_set_fast_gl16_times(const int times[15]);
+
+/**
+ * @brief 获取当前 Fast GL16 的 phase_times 指针。
+ * @return 指向 15 个 int 的数组。
+ */
+const int* epd_driver_get_fast_gl16_times(void);
+
+/**
+ * @brief 白 DU → GL16 全屏切换。
+ *
+ * 第一步用 MODE_DU 快速将屏幕刷白，
+ * 第二步用 MODE_GL16 从纯白显示目标内容。
+ *
+ * @return ESP_OK 成功。
+ */
+esp_err_t epd_driver_white_du_then_gl16(void);
+
+/**
  * @brief 将帧缓冲区全部设为白色（不刷新屏幕）。
  */
 void epd_driver_set_all_white(void);
