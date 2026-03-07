@@ -234,47 +234,6 @@ void epd_driver_set_all_white(void) {
     }
 }
 
-esp_err_t epd_driver_white_du_then_gl16(void) {
-    if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    int fb_size = epd_width() / 2 * epd_height();
-
-    /* 保存目标帧内容 */
-    uint8_t *target = (uint8_t *)heap_caps_malloc(fb_size, MALLOC_CAP_SPIRAM);
-    if (target == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate temp buffer for white DU→GL16");
-        return ESP_ERR_NO_MEM;
-    }
-    memcpy(target, s_framebuffer, fb_size);
-
-    /* 第一步：DU 快速刷白 */
-    memset(s_framebuffer, 0xFF, fb_size);
-    epd_poweron();
-    enum EpdDrawError err = epd_hl_update_screen(&s_hl_state, MODE_DU, 25);
-    if (err != EPD_DRAW_SUCCESS) {
-        ESP_LOGE(TAG, "White DU step failed: %d", err);
-        memcpy(s_framebuffer, target, fb_size);
-        heap_caps_free(target);
-        epd_poweroff();
-        return ESP_FAIL;
-    }
-
-    /* 第二步：GL16 显示目标内容 */
-    memcpy(s_framebuffer, target, fb_size);
-    err = epd_hl_update_screen(&s_hl_state, MODE_GL16, 25);
-    epd_poweroff();
-
-    heap_caps_free(target);
-
-    if (err != EPD_DRAW_SUCCESS) {
-        ESP_LOGE(TAG, "GL16 target step failed: %d", err);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
 esp_err_t epd_driver_white_black_du_then_gl16(void) {
     if (!s_initialized) {
         return ESP_ERR_INVALID_STATE;

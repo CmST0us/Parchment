@@ -33,6 +33,5 @@ private:
     // ── 刷新操作 ──
     void refreshTestArea(int epdiyMode, const char* modeName);
     void textModeRefresh();
-    void whiteDuThenGL16Refresh();
     void whiteBlackDuThenGL16Refresh();
 };

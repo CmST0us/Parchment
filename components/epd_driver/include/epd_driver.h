@@ -102,16 +102,6 @@ void epd_driver_draw_pixel(int x, int y, uint8_t color);
 void epd_driver_fill_rect(int x, int y, int w, int h, uint8_t color);
 
 /**
- * @brief 白 DU → GL16 全屏切换。
- *
- * 第一步用 MODE_DU 快速将屏幕刷白，
- * 第二步用 MODE_GL16 从纯白显示目标内容。
- *
- * @return ESP_OK 成功。
- */
-esp_err_t epd_driver_white_du_then_gl16(void);
-
-/**
  * @brief 白 DU → 黑 DU → GL16 全屏切换。
  *
  * 第一步用 MODE_DU 快速将屏幕刷白，

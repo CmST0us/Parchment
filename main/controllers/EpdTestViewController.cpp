@@ -145,13 +145,6 @@ void EpdTestViewController::loadView() {
     btnGL16->setOnTap([this]() { refreshTestArea(MODE_GL16, "GL16"); });
     refreshRow->addSubview(std::move(btnGL16));
 
-    auto btnWGL = std::make_unique<ink::ButtonView>();
-    btnWGL->setLabel("W>GL");
-    btnWGL->setFont(fontSmall);
-    btnWGL->setStyle(ink::ButtonStyle::Secondary);
-    btnWGL->setOnTap([this]() { whiteDuThenGL16Refresh(); });
-    refreshRow->addSubview(std::move(btnWGL));
-
     auto btnWBGL = std::make_unique<ink::ButtonView>();
     btnWBGL->setLabel("W>B>GL");
     btnWBGL->setFont(fontSmall);
@@ -239,29 +232,6 @@ void EpdTestViewController::textModeRefresh() {
 
     char buf[64];
     snprintf(buf, sizeof(buf), "%s | TextMode", patName);
-    infoLabel_->setText(buf);
-
-    view()->setNeedsDisplay();
-    view()->setNeedsLayout();
-}
-
-void EpdTestViewController::whiteDuThenGL16Refresh() {
-    if (!testView_) return;
-
-    testView_->patternB = !testView_->patternB;
-    const char* patName = testView_->patternB ? "B" : "A";
-
-    ink::Rect sf = testView_->screenFrame();
-    ink::Canvas canvas(epd_driver_get_framebuffer(), sf);
-    canvas.clear(ink::Color::White);
-    testView_->onDraw(canvas);
-
-    ESP_LOGI(TAG, "Pattern %s -> W>GL16", patName);
-
-    epd_driver_white_du_then_gl16();
-
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%s | W>GL16", patName);
     infoLabel_->setText(buf);
 
     view()->setNeedsDisplay();
