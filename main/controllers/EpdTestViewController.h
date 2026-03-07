@@ -6,6 +6,7 @@
 #pragma once
 
 #include "ink_ui/InkUI.h"
+#include "epd_driver.h"
 
 /// EPD 刷新模式测试页面
 class EpdTestViewController : public ink::ViewController {
@@ -31,7 +32,6 @@ private:
     ink::TextLabel* infoLabel_ = nullptr;
 
     // ── 刷新操作 ──
-    void refreshTestArea(int epdiyMode, const char* modeName);
-    void textModeRefresh();
+    void customRefresh(epd_refresh_mode_t mode, const char* modeName);
     void whiteBlackDuThenGL16Refresh();
 };

@@ -16,24 +16,18 @@ static EpdiyHighlevelState s_hl_state;
 static uint8_t *s_framebuffer = NULL;
 static bool s_initialized = false;
 
-/* ── 文字模式波形（精简 M5GFX lut_text）──
+/* ── 自定义刷新波形（基于 M5GFX lut_text）──
  *
- * 基于 M5GFX Panel_EPD lut_text，去掉 3 个重复的激进刷白相位，
- * 保留 2 个温和刷白 + 7 个精细控制 = 9 相位。
+ * 三种模式共用同一套 7 个精细控制相位（M5GFX lut_text phase 5-11），
+ * 通过增减前置刷白相位实现速度与质量的权衡。
  * 动作只取决于目标灰度 (to)，from==to 时 noop。
  *
- * 约 72ms，灰度准确，闪烁最小化。
+ * epdiy 编码: 0=noop 1=darken 2=lighten
  */
-#define TEXT_MODE_PHASES 9
 
-/* M5GFX lut_text 精简版: 去掉前 3 个相同的全量刷白相位
- * 索引: 0=黑 ~ 15=白
- * epdiy 编码: 0=noop 1=darken 2=lighten */
-static const uint8_t s_text_lut[TEXT_MODE_PHASES][16] = {
-    /* 2 个温和刷白（原 phase 3-4，已有差异化） */
-    {2,2,2,2,2,2,2,2,2,2,2,1,2,2,2,1},
-    {2,2,2,2,1,2,2,2,2,2,2,1,2,2,2,1},
-    /* 7 个精细控制（原 phase 5-11） */
+/* 7 个精细控制相位（M5GFX lut_text phase 5-11，三种模式共用） */
+#define CONTROL_PHASES 7
+static const uint8_t s_control_lut[CONTROL_PHASES][16] = {
     {1,2,2,1,1,1,1,1,0,0,1,1,0,0,1,2},
     {1,0,0,1,1,1,1,0,0,1,1,1,1,0,1,2},
     {1,0,0,1,2,2,1,1,1,1,2,1,1,1,1,2},
@@ -43,49 +37,93 @@ static const uint8_t s_text_lut[TEXT_MODE_PHASES][16] = {
     {1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2},
 };
 
-static const EpdWaveformTempInterval s_text_mode_temp[1] = {
+/* 标准模式前置：2 个温和刷白（M5GFX lut_text phase 3-4） */
+#define STANDARD_PREFIX 2
+static const uint8_t s_standard_prefix[STANDARD_PREFIX][16] = {
+    {2,2,2,2,2,2,2,2,2,2,2,1,2,2,2,1},
+    {2,2,2,2,1,2,2,2,2,2,2,1,2,2,2,1},
+};
+
+/* 质量模式前置：3 个强力刷白 + 2 个温和刷白（M5GFX lut_text phase 0-4） */
+#define QUALITY_PREFIX 5
+static const uint8_t s_quality_prefix[QUALITY_PREFIX][16] = {
+    {2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1},
+    {2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1},
+    {2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1},
+    {2,2,2,2,2,2,2,2,2,2,2,1,2,2,2,1},
+    {2,2,2,2,1,2,2,2,2,2,2,1,2,2,2,1},
+};
+
+/* 各模式总相位数 */
+#define FAST_PHASES     (CONTROL_PHASES)                     /* 7 */
+#define STANDARD_PHASES (STANDARD_PREFIX + CONTROL_PHASES)   /* 9 */
+#define QUALITY_PHASES  (QUALITY_PREFIX + CONTROL_PHASES)    /* 12 */
+#define MAX_CUSTOM_PHASES QUALITY_PHASES                     /* 12 */
+
+static const EpdWaveformTempInterval s_custom_temp[1] = {
     { .min = 0, .max = 50 }
 };
-static uint8_t s_text_mode_data[TEXT_MODE_PHASES][16][4];
-static EpdWaveformPhases s_text_mode_phases;
-static const EpdWaveformPhases *s_text_mode_ranges[1];
-static EpdWaveformMode s_text_mode_mode;
-static const EpdWaveformMode *s_text_mode_modes[1];
-static EpdWaveform s_text_mode_waveform;
+static uint8_t s_custom_data[MAX_CUSTOM_PHASES][16][4];
+static EpdWaveformPhases s_custom_phases;
+static const EpdWaveformPhases *s_custom_ranges[1];
+static EpdWaveformMode s_custom_mode;
+static const EpdWaveformMode *s_custom_modes[1];
+static EpdWaveform s_custom_waveform;
 
-static void init_text_mode_waveform(void) {
-    for (int p = 0; p < TEXT_MODE_PHASES; p++) {
-        for (int t = 0; t < 16; t++) {
-            uint8_t action = s_text_lut[p][t];
-            for (int bi = 0; bi < 4; bi++) {
-                uint8_t byte_val = 0;
-                for (int fi = 0; fi < 4; fi++) {
-                    int f = bi * 4 + fi;
-                    uint8_t a = (f == t) ? 0 : action;
-                    byte_val |= (a << (6 - 2 * fi));
-                }
-                s_text_mode_data[p][t][bi] = byte_val;
+/** 将单行 LUT (action[16]) 编码为 epdiy 格式 (data[to][from_byte]) */
+static void encode_lut_phase(const uint8_t action[16], int phase_idx) {
+    for (int t = 0; t < 16; t++) {
+        for (int bi = 0; bi < 4; bi++) {
+            uint8_t byte_val = 0;
+            for (int fi = 0; fi < 4; fi++) {
+                int f = bi * 4 + fi;
+                uint8_t a = (f == t) ? 0 : action[t];  /* from==to → noop */
+                byte_val |= (a << (6 - 2 * fi));
             }
+            s_custom_data[phase_idx][t][bi] = byte_val;
         }
     }
+}
 
-    /* 组装波形结构体 */
-    s_text_mode_phases.phases = TEXT_MODE_PHASES;
-    s_text_mode_phases.phase_times = NULL;
-    s_text_mode_phases.luts = (const uint8_t *)s_text_mode_data;
+/** 构建指定模式的波形数据 */
+static void build_custom_waveform(epd_refresh_mode_t mode) {
+    int total_phases = 0;
 
-    s_text_mode_ranges[0] = &s_text_mode_phases;
+    switch (mode) {
+    case EPD_REFRESH_FAST:
+        for (int p = 0; p < CONTROL_PHASES; p++)
+            encode_lut_phase(s_control_lut[p], total_phases++);
+        break;
+    case EPD_REFRESH_STANDARD:
+        for (int p = 0; p < STANDARD_PREFIX; p++)
+            encode_lut_phase(s_standard_prefix[p], total_phases++);
+        for (int p = 0; p < CONTROL_PHASES; p++)
+            encode_lut_phase(s_control_lut[p], total_phases++);
+        break;
+    case EPD_REFRESH_QUALITY:
+        for (int p = 0; p < QUALITY_PREFIX; p++)
+            encode_lut_phase(s_quality_prefix[p], total_phases++);
+        for (int p = 0; p < CONTROL_PHASES; p++)
+            encode_lut_phase(s_control_lut[p], total_phases++);
+        break;
+    }
 
-    s_text_mode_mode.type = 5;  /* MODE_GL16 */
-    s_text_mode_mode.temp_ranges = 1;
-    s_text_mode_mode.range_data = s_text_mode_ranges;
+    s_custom_phases.phases = total_phases;
+    s_custom_phases.phase_times = NULL;
+    s_custom_phases.luts = (const uint8_t *)s_custom_data;
 
-    s_text_mode_modes[0] = &s_text_mode_mode;
+    s_custom_ranges[0] = &s_custom_phases;
 
-    s_text_mode_waveform.num_modes = 1;
-    s_text_mode_waveform.num_temp_ranges = 1;
-    s_text_mode_waveform.mode_data = s_text_mode_modes;
-    s_text_mode_waveform.temp_intervals = s_text_mode_temp;
+    s_custom_mode.type = 5;  /* MODE_GL16 */
+    s_custom_mode.temp_ranges = 1;
+    s_custom_mode.range_data = s_custom_ranges;
+
+    s_custom_modes[0] = &s_custom_mode;
+
+    s_custom_waveform.num_modes = 1;
+    s_custom_waveform.num_temp_ranges = 1;
+    s_custom_waveform.mode_data = s_custom_modes;
+    s_custom_waveform.temp_intervals = s_custom_temp;
 }
 
 esp_err_t epd_driver_init(void) {
@@ -118,8 +156,8 @@ esp_err_t epd_driver_init(void) {
     epd_poweroff();
     ESP_LOGI(TAG, "epd_fullclear done");
 
-    /* 生成文字模式波形 LUT */
-    init_text_mode_waveform();
+    /* 预构建标准模式波形（默认） */
+    build_custom_waveform(EPD_REFRESH_STANDARD);
 
     s_initialized = true;
     ESP_LOGI(TAG, "EPD driver initialized successfully");
@@ -261,14 +299,17 @@ esp_err_t epd_driver_white_black_du_then_gl16(void) {
     return ESP_OK;
 }
 
-esp_err_t epd_driver_update_screen_text_mode(void) {
+esp_err_t epd_driver_update_screen_custom(epd_refresh_mode_t mode) {
     if (!s_initialized) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* 临时切换到文字模式波形 */
+    /* 构建指定模式的波形 */
+    build_custom_waveform(mode);
+
+    /* 临时切换到自定义波形 */
     const EpdWaveform *original = s_hl_state.waveform;
-    s_hl_state.waveform = &s_text_mode_waveform;
+    s_hl_state.waveform = &s_custom_waveform;
 
     epd_poweron();
     enum EpdDrawError err = epd_hl_update_screen(&s_hl_state, MODE_GL16, 25);
@@ -278,8 +319,12 @@ esp_err_t epd_driver_update_screen_text_mode(void) {
     s_hl_state.waveform = original;
 
     if (err != EPD_DRAW_SUCCESS) {
-        ESP_LOGE(TAG, "Text mode update failed: %d", err);
+        ESP_LOGE(TAG, "Custom refresh (mode %d) failed: %d", mode, err);
         return ESP_FAIL;
     }
     return ESP_OK;
+}
+
+esp_err_t epd_driver_update_screen_text_mode(void) {
+    return epd_driver_update_screen_custom(EPD_REFRESH_STANDARD);
 }

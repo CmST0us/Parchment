@@ -18,6 +18,15 @@ extern "C" {
 #endif
 
 /**
+ * @brief 自定义刷新模式。
+ */
+typedef enum {
+    EPD_REFRESH_FAST,      ///< 快速刷新 (~56ms, 7 相位, 无刷白)
+    EPD_REFRESH_STANDARD,  ///< 标准刷新 (~72ms, 9 相位, 温和刷白)
+    EPD_REFRESH_QUALITY,   ///< 质量刷新 (~96ms, 12 相位, 完整刷白)
+} epd_refresh_mode_t;
+
+/**
  * @brief 初始化 E-Ink 显示驱动。
  *
  * 调用 epdiy 初始化 M5PaperS3 板级定义和 ED047TC2 显示屏，
@@ -114,12 +123,21 @@ void epd_driver_fill_rect(int x, int y, int w, int h, uint8_t color);
 esp_err_t epd_driver_white_black_du_then_gl16(void);
 
 /**
- * @brief 文字模式全屏刷新（参考 M5GFX 先白后涂策略）。
+ * @brief 自定义波形全屏刷新。
  *
- * 基于 M5GFX lut_text 精简版：2 个温和刷白 + 7 个精细控制 = 9 相位。
- * 单次调用完成，约 72ms，支持 16 级灰度，闪烁最小化。
+ * 使用基于 M5GFX lut_text 的自定义波形刷新屏幕，支持三种模式：
+ * - FAST:     7 相位 (~56ms)，仅精细控制，无刷白，速度最快
+ * - STANDARD: 9 相位 (~72ms)，温和刷白 + 精细控制，均衡
+ * - QUALITY:  12 相位 (~96ms)，完整刷白 + 精细控制，残影最少
  *
+ * @param mode 刷新模式。
  * @return ESP_OK 成功。
+ */
+esp_err_t epd_driver_update_screen_custom(epd_refresh_mode_t mode);
+
+/**
+ * @brief 标准模式全屏刷新（等同于 STANDARD 模式）。
+ * @deprecated 使用 epd_driver_update_screen_custom(EPD_REFRESH_STANDARD)。
  */
 esp_err_t epd_driver_update_screen_text_mode(void);
 
