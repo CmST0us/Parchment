@@ -1,15 +1,13 @@
 /**
  * @file EpdTestViewController.h
- * @brief EPD 时序调节测试页面。
+ * @brief EPD 刷新调节测试页面。
  */
 
 #pragma once
 
 #include "ink_ui/InkUI.h"
 
-#define FAST_GL16_PHASES 15
-
-/// EPD 时序调节与刷新模式测试页面
+/// EPD 刷新调节与测试页面
 class EpdTestViewController : public ink::ViewController {
 public:
     explicit EpdTestViewController(ink::Application& app);
@@ -31,22 +29,14 @@ private:
     // ── View 引用（非持有） ──
     TestPatternView* testView_ = nullptr;
     ink::TextLabel* infoLabel_ = nullptr;
-
-    // Phase 值显示标签（当前组 5 个）
-    ink::TextLabel* phaseLabels_[5] = {};
-
-    // 分组按钮引用（用于高亮当前组）
-    ink::ButtonView* groupBtns_[3] = {};
+    ink::TextLabel* phaseCountLabel_ = nullptr;
 
     // ── 状态 ──
-    int currentTimes_[FAST_GL16_PHASES] = {};
-    int currentGroup_ = 0;  ///< 当前显示的 phase 分组（0/1/2）
+    int numPhases_ = 15;
 
     // ── 操作方法 ──
-    void applyPreset(const int preset[FAST_GL16_PHASES]);
-    void selectGroup(int group);
-    void adjustPhase(int indexInGroup, int delta);
-    void updatePhaseDisplay();
+    void setPhaseCount(int count);
+    void updatePhaseCountDisplay();
 
     void refreshTestArea(int epdiyMode, const char* modeName);
     void fastGL16Refresh();

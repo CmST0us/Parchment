@@ -18,27 +18,29 @@ static bool s_initialized = false;
 
 /* ── 快速 GL16 波形（灰度版 DU）──
  *
- * 15 个相位，运行时生成 LUT 覆盖所有 16×16 from→to 灰度组合。
+ * 可调相位数（1~15），运行时生成 LUT 覆盖所有 16×16 from→to 灰度组合。
  * Phase p 中：|delta| > p 的像素施加 lighten/darken，其余不操作。
- * 效果：GL16 级灰度精度，DU 级速度，无闪烁。
+ *
+ * 注意: ESP32-S3 LCD 模式下 phase_times 被硬件忽略，
+ * 每个 phase 固定约 8ms，因此 draw_time ≈ num_phases × 8ms。
  */
-#define FAST_GL16_PHASES 15
-static int s_fast_gl16_times[FAST_GL16_PHASES] = {
-    10, 10, 10, 10, 10, 15, 15, 20, 20, 30, 30, 50, 50, 80, 120
-};
+#define FAST_GL16_MAX_PHASES 15
+static int s_fast_gl16_num_phases = 15;
 static const EpdWaveformTempInterval s_fast_gl16_temp[1] = {
     { .min = 0, .max = 50 }
 };
-static uint8_t s_fast_gl16_data[FAST_GL16_PHASES][16][4];
+static uint8_t s_fast_gl16_data[FAST_GL16_MAX_PHASES][16][4];
 static EpdWaveformPhases s_fast_gl16_phases;
 static const EpdWaveformPhases *s_fast_gl16_ranges[1];
 static EpdWaveformMode s_fast_gl16_mode;
 static const EpdWaveformMode *s_fast_gl16_modes[1];
 static EpdWaveform s_fast_gl16_waveform;
 
-static void init_fast_gl16_waveform(void) {
+static void rebuild_fast_gl16_waveform(void) {
+    int n = s_fast_gl16_num_phases;
+
     /* 生成 LUT: 对每个 (phase, to, from) 计算 lighten/darken/nothing */
-    for (int p = 0; p < FAST_GL16_PHASES; p++) {
+    for (int p = 0; p < n; p++) {
         for (int t = 0; t < 16; t++) {
             for (int bi = 0; bi < 4; bi++) {
                 uint8_t byte_val = 0;
@@ -58,8 +60,8 @@ static void init_fast_gl16_waveform(void) {
     }
 
     /* 组装波形结构体 */
-    s_fast_gl16_phases.phases = FAST_GL16_PHASES;
-    s_fast_gl16_phases.phase_times = s_fast_gl16_times;
+    s_fast_gl16_phases.phases = n;
+    s_fast_gl16_phases.phase_times = NULL;  /* LCD 模式忽略此值 */
     s_fast_gl16_phases.luts = (const uint8_t *)s_fast_gl16_data;
 
     s_fast_gl16_ranges[0] = &s_fast_gl16_phases;
@@ -108,7 +110,7 @@ esp_err_t epd_driver_init(void) {
     ESP_LOGI(TAG, "epd_fullclear done");
 
     /* 生成快速 GL16 波形 LUT */
-    init_fast_gl16_waveform();
+    rebuild_fast_gl16_waveform();
 
     s_initialized = true;
     ESP_LOGI(TAG, "EPD driver initialized successfully");
@@ -243,13 +245,16 @@ void epd_driver_set_all_white(void) {
     }
 }
 
-void epd_driver_set_fast_gl16_times(const int times[FAST_GL16_PHASES]) {
-    memcpy(s_fast_gl16_times, times, sizeof(s_fast_gl16_times));
-    /* LUT data 不依赖 phase_times，无需重建 */
+void epd_driver_set_fast_gl16_phases(int num_phases) {
+    if (num_phases < 1) num_phases = 1;
+    if (num_phases > FAST_GL16_MAX_PHASES) num_phases = FAST_GL16_MAX_PHASES;
+    s_fast_gl16_num_phases = num_phases;
+    rebuild_fast_gl16_waveform();
+    ESP_LOGI(TAG, "Fast GL16 phases set to %d (~%dms)", num_phases, num_phases * 8);
 }
 
-const int* epd_driver_get_fast_gl16_times(void) {
-    return s_fast_gl16_times;
+int epd_driver_get_fast_gl16_phases(void) {
+    return s_fast_gl16_num_phases;
 }
 
 esp_err_t epd_driver_white_du_then_gl16(void) {

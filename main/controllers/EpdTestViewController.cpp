@@ -1,12 +1,12 @@
 /**
  * @file EpdTestViewController.cpp
- * @brief EPD 时序调节测试页面实现。
+ * @brief EPD 刷新调节测试页面实现。
  */
 
 #include "controllers/EpdTestViewController.h"
 
 #include <algorithm>
-#include <cstring>
+#include <string.h>
 
 #include "esp_log.h"
 #include "epd_driver.h"
@@ -19,17 +19,6 @@ extern "C" {
 #include "ui_icon.h"
 
 static const char* TAG = "EpdTestVC";
-
-// ── 预设时序 ──
-static const int kPresetFast[FAST_GL16_PHASES] = {
-    10, 10, 10, 10, 10, 15, 15, 20, 20, 30, 30, 50, 50, 80, 120
-};
-static const int kPresetNormal[FAST_GL16_PHASES] = {
-    15, 15, 15, 15, 15, 20, 20, 30, 30, 40, 40, 60, 60, 100, 150
-};
-static const int kPresetSlow[FAST_GL16_PHASES] = {
-    20, 20, 20, 20, 20, 30, 30, 40, 40, 60, 60, 80, 80, 120, 200
-};
 
 // ── 正文样例 ──
 static const char* kSampleTextA =
@@ -47,7 +36,6 @@ void EpdTestViewController::TestPatternView::onDraw(ink::Canvas& canvas) {
     const EpdFont* font = ui_font_get(24);
 
     if (!patternB) {
-        // ── 图案 A ──
         // 上 1/3: 灰度渐变 (黑→白)
         constexpr int kSteps = 16;
         int stepW = b.w / kSteps;
@@ -80,7 +68,6 @@ void EpdTestViewController::TestPatternView::onDraw(ink::Canvas& canvas) {
             }
         }
     } else {
-        // ── 图案 B ──
         // 上 1/3: 反向灰度渐变 (白→黑)
         constexpr int kSteps = 16;
         int stepW = b.w / kSteps;
@@ -116,8 +103,7 @@ void EpdTestViewController::TestPatternView::onDraw(ink::Canvas& canvas) {
 EpdTestViewController::EpdTestViewController(ink::Application& app)
     : app_(app) {
     title_ = "EPD Test";
-    // 初始化为 Fast 预设
-    memcpy(currentTimes_, kPresetFast, sizeof(currentTimes_));
+    numPhases_ = epd_driver_get_fast_gl16_phases();
 }
 
 void EpdTestViewController::loadView() {
@@ -133,7 +119,7 @@ void EpdTestViewController::loadView() {
     // ── Header ──
     auto header = std::make_unique<ink::HeaderView>();
     header->setFont(fontLarge);
-    header->setTitle("EPD Timing Tuner");
+    header->setTitle("EPD Tuner");
     header->setLeftIcon(UI_ICON_ARROW_LEFT.data, [this]() {
         app_.navigator().pop();
     });
@@ -142,93 +128,65 @@ void EpdTestViewController::loadView() {
     // ── 信息标签 ──
     auto info = std::make_unique<ink::TextLabel>();
     info->setFont(fontSmall);
-    info->setText("Select preset, adjust phases, then refresh");
+    info->setText("Adjust phases, then tap a refresh button");
     infoLabel_ = info.get();
     view_->addSubview(std::move(info));
 
-    // ── 预设选择行 ──
+    // ── Phase 数量调节行: "Phases: 15 (~120ms)  [-] [+]" ──
+    auto phaseRow = std::make_unique<ink::View>();
+    phaseRow->setBackgroundColor(ink::Color::Clear);
+    phaseRow->flexStyle_.direction = ink::FlexDirection::Row;
+    phaseRow->flexStyle_.gap = 8;
+    phaseRow->flexBasis_ = 40;
+
+    auto phaseLabel = std::make_unique<ink::TextLabel>();
+    phaseLabel->setFont(fontSmall);
+    phaseLabel->flexGrow_ = 1;
+    phaseCountLabel_ = phaseLabel.get();
+    phaseRow->addSubview(std::move(phaseLabel));
+
+    auto btnMinus = std::make_unique<ink::ButtonView>();
+    btnMinus->setLabel("-");
+    btnMinus->setFont(fontLarge);
+    btnMinus->setStyle(ink::ButtonStyle::Secondary);
+    btnMinus->setOnTap([this]() { setPhaseCount(numPhases_ - 1); });
+    phaseRow->addSubview(std::move(btnMinus));
+
+    auto btnPlus = std::make_unique<ink::ButtonView>();
+    btnPlus->setLabel("+");
+    btnPlus->setFont(fontLarge);
+    btnPlus->setStyle(ink::ButtonStyle::Secondary);
+    btnPlus->setOnTap([this]() { setPhaseCount(numPhases_ + 1); });
+    phaseRow->addSubview(std::move(btnPlus));
+
+    view_->addSubview(std::move(phaseRow));
+
+    // ── 快捷预设行 ──
     auto presetRow = std::make_unique<ink::View>();
     presetRow->setBackgroundColor(ink::Color::Clear);
     presetRow->flexStyle_.direction = ink::FlexDirection::Row;
     presetRow->flexStyle_.gap = 8;
-    presetRow->flexBasis_ = 40;
+    presetRow->flexBasis_ = 36;
 
-    auto btnFast = std::make_unique<ink::ButtonView>();
-    btnFast->setLabel("Fast");
-    btnFast->setFont(fontSmall);
-    btnFast->setStyle(ink::ButtonStyle::Primary);
-    btnFast->setOnTap([this]() { applyPreset(kPresetFast); });
-    presetRow->addSubview(std::move(btnFast));
-
-    auto btnNormal = std::make_unique<ink::ButtonView>();
-    btnNormal->setLabel("Normal");
-    btnNormal->setFont(fontSmall);
-    btnNormal->setStyle(ink::ButtonStyle::Secondary);
-    btnNormal->setOnTap([this]() { applyPreset(kPresetNormal); });
-    presetRow->addSubview(std::move(btnNormal));
-
-    auto btnSlow = std::make_unique<ink::ButtonView>();
-    btnSlow->setLabel("Slow");
-    btnSlow->setFont(fontSmall);
-    btnSlow->setStyle(ink::ButtonStyle::Secondary);
-    btnSlow->setOnTap([this]() { applyPreset(kPresetSlow); });
-    presetRow->addSubview(std::move(btnSlow));
+    struct Preset { const char* label; int phases; };
+    Preset presets[] = {
+        {"3p ~24ms", 3},
+        {"5p ~40ms", 5},
+        {"8p ~64ms", 8},
+        {"10p ~80ms", 10},
+        {"15p ~120ms", 15},
+    };
+    for (auto& pr : presets) {
+        auto btn = std::make_unique<ink::ButtonView>();
+        btn->setLabel(pr.label);
+        btn->setFont(fontSmall);
+        btn->setStyle(ink::ButtonStyle::Secondary);
+        int p = pr.phases;
+        btn->setOnTap([this, p]() { setPhaseCount(p); });
+        presetRow->addSubview(std::move(btn));
+    }
 
     view_->addSubview(std::move(presetRow));
-
-    // ── Phase 分组选择行 ──
-    auto groupRow = std::make_unique<ink::View>();
-    groupRow->setBackgroundColor(ink::Color::Clear);
-    groupRow->flexStyle_.direction = ink::FlexDirection::Row;
-    groupRow->flexStyle_.gap = 8;
-    groupRow->flexBasis_ = 36;
-
-    const char* groupLabels[] = {"P0-4", "P5-9", "P10-14"};
-    for (int g = 0; g < 3; g++) {
-        auto btn = std::make_unique<ink::ButtonView>();
-        btn->setLabel(groupLabels[g]);
-        btn->setFont(fontSmall);
-        btn->setStyle(g == 0 ? ink::ButtonStyle::Primary : ink::ButtonStyle::Secondary);
-        btn->setOnTap([this, g]() { selectGroup(g); });
-        groupBtns_[g] = btn.get();
-        groupRow->addSubview(std::move(btn));
-    }
-
-    view_->addSubview(std::move(groupRow));
-
-    // ── Phase 调节行（5 行，每行: "Pn: value  [+] [-]"）──
-    for (int i = 0; i < 5; i++) {
-        auto row = std::make_unique<ink::View>();
-        row->setBackgroundColor(ink::Color::Clear);
-        row->flexStyle_.direction = ink::FlexDirection::Row;
-        row->flexStyle_.gap = 4;
-        row->flexBasis_ = 32;
-
-        // Phase 值标签
-        auto label = std::make_unique<ink::TextLabel>();
-        label->setFont(fontSmall);
-        label->flexGrow_ = 1;
-        phaseLabels_[i] = label.get();
-        row->addSubview(std::move(label));
-
-        // [+] 按钮
-        auto btnPlus = std::make_unique<ink::ButtonView>();
-        btnPlus->setLabel("+");
-        btnPlus->setFont(fontSmall);
-        btnPlus->setStyle(ink::ButtonStyle::Secondary);
-        btnPlus->setOnTap([this, i]() { adjustPhase(i, 5); });
-        row->addSubview(std::move(btnPlus));
-
-        // [-] 按钮
-        auto btnMinus = std::make_unique<ink::ButtonView>();
-        btnMinus->setLabel("-");
-        btnMinus->setFont(fontSmall);
-        btnMinus->setStyle(ink::ButtonStyle::Secondary);
-        btnMinus->setOnTap([this, i]() { adjustPhase(i, -5); });
-        row->addSubview(std::move(btnMinus));
-
-        view_->addSubview(std::move(row));
-    }
 
     // ── 分隔线 ──
     view_->addSubview(std::make_unique<ink::SeparatorView>());
@@ -287,60 +245,25 @@ void EpdTestViewController::loadView() {
 }
 
 void EpdTestViewController::viewDidLoad() {
-    ESP_LOGI(TAG, "EPD timing tuner loaded");
-    updatePhaseDisplay();
+    ESP_LOGI(TAG, "EPD tuner loaded");
+    updatePhaseCountDisplay();
 }
 
-// ── 预设与调节 ──
+// ── Phase 数量调节 ──
 
-void EpdTestViewController::applyPreset(const int preset[FAST_GL16_PHASES]) {
-    memcpy(currentTimes_, preset, sizeof(currentTimes_));
-    updatePhaseDisplay();
-
-    char buf[64];
-    int total = 0;
-    for (int i = 0; i < FAST_GL16_PHASES; i++) total += currentTimes_[i];
-    snprintf(buf, sizeof(buf), "Preset applied (total: %dus)", total);
-    infoLabel_->setText(buf);
+void EpdTestViewController::setPhaseCount(int count) {
+    if (count < 1) count = 1;
+    if (count > 15) count = 15;
+    numPhases_ = count;
+    epd_driver_set_fast_gl16_phases(count);
+    updatePhaseCountDisplay();
 }
 
-void EpdTestViewController::selectGroup(int group) {
-    currentGroup_ = group;
-
-    // 更新分组按钮样式
-    for (int g = 0; g < 3; g++) {
-        if (groupBtns_[g]) {
-            groupBtns_[g]->setStyle(g == group ? ink::ButtonStyle::Primary
-                                               : ink::ButtonStyle::Secondary);
-        }
-    }
-    updatePhaseDisplay();
-}
-
-void EpdTestViewController::adjustPhase(int indexInGroup, int delta) {
-    int phaseIdx = currentGroup_ * 5 + indexInGroup;
-    if (phaseIdx >= FAST_GL16_PHASES) return;
-
-    currentTimes_[phaseIdx] += delta;
-    if (currentTimes_[phaseIdx] < 5) currentTimes_[phaseIdx] = 5;
-    if (currentTimes_[phaseIdx] > 500) currentTimes_[phaseIdx] = 500;
-
-    updatePhaseDisplay();
-}
-
-void EpdTestViewController::updatePhaseDisplay() {
-    for (int i = 0; i < 5; i++) {
-        int phaseIdx = currentGroup_ * 5 + i;
-        if (phaseLabels_[i] == nullptr) continue;
-
-        if (phaseIdx < FAST_GL16_PHASES) {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "P%d: %d", phaseIdx, currentTimes_[phaseIdx]);
-            phaseLabels_[i]->setText(buf);
-        } else {
-            phaseLabels_[i]->setText("--");
-        }
-    }
+void EpdTestViewController::updatePhaseCountDisplay() {
+    if (!phaseCountLabel_) return;
+    char buf[48];
+    snprintf(buf, sizeof(buf), "Phases: %d (~%dms)", numPhases_, numPhases_ * 8);
+    phaseCountLabel_->setText(buf);
 }
 
 // ── 刷新操作 ──
@@ -358,7 +281,6 @@ void EpdTestViewController::refreshTestArea(int epdiyMode, const char* modeName)
 
     ESP_LOGI(TAG, "Pattern %s -> %s", patName, modeName);
 
-    // 逻辑 → 物理坐标转换
     int px = sf.y;
     int py = ink::kScreenWidth - sf.x - sf.w;
     int pw = sf.h;
@@ -374,9 +296,6 @@ void EpdTestViewController::refreshTestArea(int epdiyMode, const char* modeName)
 void EpdTestViewController::fastGL16Refresh() {
     if (!testView_) return;
 
-    // 下发当前时序到 driver
-    epd_driver_set_fast_gl16_times(currentTimes_);
-
     testView_->patternB = !testView_->patternB;
     const char* patName = testView_->patternB ? "B" : "A";
 
@@ -385,15 +304,12 @@ void EpdTestViewController::fastGL16Refresh() {
     canvas.clear(ink::Color::White);
     testView_->onDraw(canvas);
 
-    ESP_LOGI(TAG, "Pattern %s -> Fast GL16 (custom times)", patName);
+    ESP_LOGI(TAG, "Pattern %s -> FastGL16 (%d phases)", patName, numPhases_);
 
     epd_driver_update_screen_fast_gl16();
 
-    int total = 0;
-    for (int i = 0; i < FAST_GL16_PHASES; i++) total += currentTimes_[i];
-
     char buf[64];
-    snprintf(buf, sizeof(buf), "%s | FastGL16 %dus", patName, total);
+    snprintf(buf, sizeof(buf), "%s | FastGL16 %dp", patName, numPhases_);
     infoLabel_->setText(buf);
 
     view()->setNeedsDisplay();
@@ -406,7 +322,6 @@ void EpdTestViewController::whiteDuThenGL16Refresh() {
     testView_->patternB = !testView_->patternB;
     const char* patName = testView_->patternB ? "B" : "A";
 
-    // 先绘制目标图案到 framebuffer
     ink::Rect sf = testView_->screenFrame();
     ink::Canvas canvas(epd_driver_get_framebuffer(), sf);
     canvas.clear(ink::Color::White);
@@ -414,7 +329,6 @@ void EpdTestViewController::whiteDuThenGL16Refresh() {
 
     ESP_LOGI(TAG, "Pattern %s -> White DU then GL16", patName);
 
-    // 执行 白DU → GL16 流程
     epd_driver_white_du_then_gl16();
 
     char buf[64];

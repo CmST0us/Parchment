@@ -123,16 +123,21 @@ esp_err_t epd_driver_update_screen_fast_gl16(void);
 esp_err_t epd_driver_update_area_fast_gl16(int x, int y, int w, int h);
 
 /**
- * @brief 设置 Fast GL16 波形的 phase_times（运行时可调）。
- * @param times 15 个 phase 时间值的数组。
+ * @brief 设置 Fast GL16 波形的 phase 数量并重建 LUT。
+ *
+ * 每个 phase 在 LCD 模式下固定约 8ms，
+ * 因此 draw_time ≈ num_phases × 8ms。
+ * 范围: 1~15。更多 phase = 更好灰度但更慢。
+ *
+ * @param num_phases phase 数量（1~15）。
  */
-void epd_driver_set_fast_gl16_times(const int times[15]);
+void epd_driver_set_fast_gl16_phases(int num_phases);
 
 /**
- * @brief 获取当前 Fast GL16 的 phase_times 指针。
- * @return 指向 15 个 int 的数组。
+ * @brief 获取当前 Fast GL16 的 phase 数量。
+ * @return 当前 phase 数量。
  */
-const int* epd_driver_get_fast_gl16_times(void);
+int epd_driver_get_fast_gl16_phases(void);
 
 /**
  * @brief 白 DU → GL16 全屏切换。
