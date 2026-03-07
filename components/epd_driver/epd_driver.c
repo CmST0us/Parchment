@@ -16,32 +16,24 @@ static EpdiyHighlevelState s_hl_state;
 static uint8_t *s_framebuffer = NULL;
 static bool s_initialized = false;
 
-/* ── 文字模式波形 (参考 M5GFX Panel_EPD lut_eraser + lut_text) ──
+/* ── 文字模式波形（精简 M5GFX lut_text）──
  *
- * Phase 0-1:  消去 — 将当前像素向中灰偏移（减少残影）
- * Phase 2-13: 先白后涂 — 渐变刷白，再逐步涂至目标灰度
+ * 基于 M5GFX Panel_EPD lut_text，去掉 3 个重复的激进刷白相位，
+ * 保留 2 个温和刷白 + 7 个精细控制 = 9 相位。
+ * 动作只取决于目标灰度 (to)，from==to 时 noop。
  *
- * 总计 14 相位，LCD 模式每相位约 8ms，总计约 112ms。
- * 支持 16 级灰度，无闪烁。
+ * 约 72ms，灰度准确，闪烁最小化。
  */
-#define TEXT_MODE_PHASES 14
+#define TEXT_MODE_PHASES 9
 
-/* M5GFX lut_eraser: 动作取决于当前像素灰度 (from)
- * 索引: 0=黑 ~ 15=白, 值: 0=noop 1=darken 2=lighten */
-static const uint8_t s_eraser_lut[2][16] = {
-    {2,2,2,2,2,2,2,2,2,2,2,0,0,0,1,1},
-    {2,2,0,0,0,1,1,1,1,1,1,1,1,1,1,1},
-};
-
-/* M5GFX lut_text: 动作取决于目标像素灰度 (to)
+/* M5GFX lut_text 精简版: 去掉前 3 个相同的全量刷白相位
  * 索引: 0=黑 ~ 15=白
- * M5GFX 编码 1=darken 2=lighten 3=noop → epdiy 1=darken 2=lighten 0=noop */
-static const uint8_t s_text_lut[12][16] = {
-    {2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1},
-    {2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1},
-    {2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1},
+ * epdiy 编码: 0=noop 1=darken 2=lighten */
+static const uint8_t s_text_lut[TEXT_MODE_PHASES][16] = {
+    /* 2 个温和刷白（原 phase 3-4，已有差异化） */
     {2,2,2,2,2,2,2,2,2,2,2,1,2,2,2,1},
     {2,2,2,2,1,2,2,2,2,2,2,1,2,2,2,1},
+    /* 7 个精细控制（原 phase 5-11） */
     {1,2,2,1,1,1,1,1,0,0,1,1,0,0,1,2},
     {1,0,0,1,1,1,1,0,0,1,1,1,1,0,1,2},
     {1,0,0,1,2,2,1,1,1,1,2,1,1,1,1,2},
@@ -62,25 +54,7 @@ static const EpdWaveformMode *s_text_mode_modes[1];
 static EpdWaveform s_text_mode_waveform;
 
 static void init_text_mode_waveform(void) {
-    /* Phase 0-1: Eraser — 动作取决于 from (当前灰度)
-     * from==to 时 noop，避免未变化像素闪烁 */
-    for (int p = 0; p < 2; p++) {
-        for (int t = 0; t < 16; t++) {
-            for (int bi = 0; bi < 4; bi++) {
-                uint8_t byte_val = 0;
-                for (int fi = 0; fi < 4; fi++) {
-                    int f = bi * 4 + fi;
-                    uint8_t action = (f == t) ? 0 : s_eraser_lut[p][f];
-                    byte_val |= (action << (6 - 2 * fi));
-                }
-                s_text_mode_data[p][t][bi] = byte_val;
-            }
-        }
-    }
-
-    /* Phase 2-13: Text — 动作取决于 to (目标灰度)
-     * from==to 时 noop，只驱动实际变化的像素 */
-    for (int p = 0; p < 12; p++) {
+    for (int p = 0; p < TEXT_MODE_PHASES; p++) {
         for (int t = 0; t < 16; t++) {
             uint8_t action = s_text_lut[p][t];
             for (int bi = 0; bi < 4; bi++) {
@@ -90,7 +64,7 @@ static void init_text_mode_waveform(void) {
                     uint8_t a = (f == t) ? 0 : action;
                     byte_val |= (a << (6 - 2 * fi));
                 }
-                s_text_mode_data[2 + p][t][bi] = byte_val;
+                s_text_mode_data[p][t][bi] = byte_val;
             }
         }
     }
