@@ -81,6 +81,7 @@ void Application::mountViewController(ViewController* vc) {
     if (!contentArea_) return;
 
     // 1. 归还旧 VC 的 View 所有权（旧 VC 此时仍然存活）
+    bool isTransition = (mountedVC_ != nullptr);
     if (mountedVC_ && !contentArea_->subviews().empty()) {
         View* oldView = contentArea_->subviews().front().get();
         auto owned = oldView->removeFromParent();
@@ -114,6 +115,11 @@ void Application::mountViewController(ViewController* vc) {
     // 4. 触发整个 Window 树重新布局
     windowRoot_->setNeedsLayout();
     windowRoot_->setNeedsDisplay();
+
+    // 5. VC 切换时使用过渡刷新模式（W>B>GL）
+    if (isTransition && renderEngine_) {
+        renderEngine_->setPendingTransition();
+    }
 
     fprintf(stderr, "ink::App: Mounted VC: '%s', statusBar=%s\n",
             vc->title_.c_str(),

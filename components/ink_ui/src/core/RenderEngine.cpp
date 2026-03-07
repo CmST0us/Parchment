@@ -43,7 +43,21 @@ void RenderEngine::renderCycle(View* rootView) {
     INKUI_PROFILE_END(collect);
 
     if (dirtyCount_ == 0) {
-        return;  // 无脏区域，跳过 Phase 3-5
+        pendingTransition_ = false;
+        return;  // 无脏区域，跳过后续阶段
+    }
+
+    // Phase 2.5: Transition — W>B 全屏 DU 快刷消残影
+    if (pendingTransition_) {
+        INKUI_PROFILE_BEGIN(transition);
+        driver_.setAllWhite();
+        driver_.updateArea(0, 0, driver_.width(), driver_.height(),
+                           RefreshMode::Fast);
+        driver_.setAllBlack();
+        driver_.updateArea(0, 0, driver_.width(), driver_.height(),
+                           RefreshMode::Fast);
+        pendingTransition_ = false;
+        INKUI_PROFILE_END(transition);
     }
 
     // Phase 3: Draw Dirty
@@ -169,6 +183,10 @@ void RenderEngine::flush() {
         Rect phys = logicalToPhysical(dirtyRegions_[i].rect);
         driver_.updateArea(phys.x, phys.y, phys.w, phys.h, RefreshMode::Full);
     }
+}
+
+void RenderEngine::setPendingTransition() {
+    pendingTransition_ = true;
 }
 
 // ── 辅助函数 ──

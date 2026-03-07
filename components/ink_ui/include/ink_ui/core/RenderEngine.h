@@ -35,12 +35,16 @@ public:
     /// 损伤修复：对指定区域裁剪重绘并刷新
     void repairDamage(View* rootView, const Rect& damage);
 
+    /// 设置下一次 flush 使用过渡刷新模式（W>B>GL）
+    void setPendingTransition();
+
 private:
     DisplayDriver& driver_;
     uint8_t* fb_;
 
     DirtyEntry dirtyRegions_[MAX_DIRTY_REGIONS];
     int dirtyCount_ = 0;
+    bool pendingTransition_ = false;  ///< 下一次 flush 使用 W>B>GL 过渡
 
 #ifdef CONFIG_INKUI_PROFILE
     int64_t profClearUs_ = 0;    ///< canvas.clear() 累计耗时

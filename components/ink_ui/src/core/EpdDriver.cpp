@@ -96,6 +96,10 @@ void EpdDriver::setAllWhite() {
     epd_driver_set_all_white();
 }
 
+void EpdDriver::setAllBlack() {
+    epd_driver_set_all_black();
+}
+
 EpdMode EpdDriver::toEpdMode(RefreshMode mode) {
     switch (mode) {
         case RefreshMode::Full:  return EpdMode::GL16;

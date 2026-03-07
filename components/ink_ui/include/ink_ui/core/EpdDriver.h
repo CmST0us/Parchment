@@ -50,6 +50,9 @@ public:
     /// 将帧缓冲区全部设为白色 (不刷新屏幕)
     void setAllWhite() override;
 
+    /// 将帧缓冲区全部设为黑色 (不刷新屏幕)
+    void setAllBlack() override;
+
     /// 物理 framebuffer 宽度
     int width() const override { return kFbPhysWidth; }
 

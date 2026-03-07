@@ -246,6 +246,13 @@ void epd_driver_set_all_white(void) {
     }
 }
 
+void epd_driver_set_all_black(void) {
+    if (s_initialized) {
+        memset(epd_hl_get_framebuffer(&s_hl_state), 0x00,
+               epd_width() / 2 * epd_height());
+    }
+}
+
 esp_err_t epd_driver_white_black_du_then_gl16(void) {
     if (!s_initialized) {
         return ESP_ERR_INVALID_STATE;

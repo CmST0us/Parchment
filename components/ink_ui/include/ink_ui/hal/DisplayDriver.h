@@ -47,6 +47,9 @@ public:
     /// 将帧缓冲区全部设为白色（不刷新屏幕）
     virtual void setAllWhite() = 0;
 
+    /// 将帧缓冲区全部设为黑色（不刷新屏幕）
+    virtual void setAllBlack() = 0;
+
     /// 物理 framebuffer 宽度
     virtual int width() const = 0;
 

@@ -146,6 +146,11 @@ esp_err_t epd_driver_update_screen_text_mode(void);
  */
 void epd_driver_set_all_white(void);
 
+/**
+ * @brief 将帧缓冲区全部设为黑色（不刷新屏幕）。
+ */
+void epd_driver_set_all_black(void);
+
 #ifdef __cplusplus
 }
 #endif
