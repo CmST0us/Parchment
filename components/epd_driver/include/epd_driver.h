@@ -124,6 +124,18 @@ esp_err_t epd_driver_white_du_then_gl16(void);
 esp_err_t epd_driver_white_black_du_then_gl16(void);
 
 /**
+ * @brief 文字模式全屏刷新（参考 M5GFX 先白后涂策略）。
+ *
+ * 使用自定义 14 相位波形：
+ * Phase 0-1: 消去，将当前像素偏移到中灰（减少残影）
+ * Phase 2-13: 先白后涂，渐变刷白后逐级涂至目标灰度
+ * 单次调用完成，约 112ms，支持 16 级灰度，无闪烁。
+ *
+ * @return ESP_OK 成功。
+ */
+esp_err_t epd_driver_update_screen_text_mode(void);
+
+/**
  * @brief 将帧缓冲区全部设为白色（不刷新屏幕）。
  */
 void epd_driver_set_all_white(void);

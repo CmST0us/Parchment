@@ -159,6 +159,13 @@ void EpdTestViewController::loadView() {
     btnWBGL->setOnTap([this]() { whiteBlackDuThenGL16Refresh(); });
     refreshRow->addSubview(std::move(btnWBGL));
 
+    auto btnText = std::make_unique<ink::ButtonView>();
+    btnText->setLabel("Text");
+    btnText->setFont(fontSmall);
+    btnText->setStyle(ink::ButtonStyle::Secondary);
+    btnText->setOnTap([this]() { textModeRefresh(); });
+    refreshRow->addSubview(std::move(btnText));
+
     auto btnClear = std::make_unique<ink::ButtonView>();
     btnClear->setLabel("Clear");
     btnClear->setFont(fontSmall);
@@ -213,6 +220,29 @@ void EpdTestViewController::refreshTestArea(int epdiyMode, const char* modeName)
     char buf[64];
     snprintf(buf, sizeof(buf), "Pattern %s | %s", patName, modeName);
     infoLabel_->setText(buf);
+}
+
+void EpdTestViewController::textModeRefresh() {
+    if (!testView_) return;
+
+    testView_->patternB = !testView_->patternB;
+    const char* patName = testView_->patternB ? "B" : "A";
+
+    ink::Rect sf = testView_->screenFrame();
+    ink::Canvas canvas(epd_driver_get_framebuffer(), sf);
+    canvas.clear(ink::Color::White);
+    testView_->onDraw(canvas);
+
+    ESP_LOGI(TAG, "Pattern %s -> TextMode", patName);
+
+    epd_driver_update_screen_text_mode();
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%s | TextMode", patName);
+    infoLabel_->setText(buf);
+
+    view()->setNeedsDisplay();
+    view()->setNeedsLayout();
 }
 
 void EpdTestViewController::whiteDuThenGL16Refresh() {
