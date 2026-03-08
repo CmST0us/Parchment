@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 /** 阅读偏好默认值。 */
-#define SETTINGS_DEFAULT_FONT_SIZE         20
+#define SETTINGS_DEFAULT_FONT_SIZE         32
 #define SETTINGS_DEFAULT_LINE_SPACING      16  /* 实际 1.6, 存储 ×10 */
 #define SETTINGS_DEFAULT_PARAGRAPH_SPACING 8
 #define SETTINGS_DEFAULT_MARGIN            24

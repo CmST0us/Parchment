@@ -98,7 +98,7 @@ void ReaderViewController::loadView() {
     // 加载阅读偏好（影响 view 树构建）
     settings_store_load_prefs(&prefs_);
 
-    const EpdFont* fontSmall = ui_font_get(20);
+    const EpdFont* fontSmall = ui_font_get(24);
     const EpdFont* fontReading = ui_font_get(prefs_.font_size);
     if (!fontReading) fontReading = fontSmall;
 

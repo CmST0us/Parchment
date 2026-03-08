@@ -178,10 +178,11 @@ void RenderEngine::drawView(View* view, bool forced) {
 /// RefreshHint → RefreshMode 映射
 static RefreshMode hintToMode(RefreshHint hint) {
     switch (hint) {
-        case RefreshHint::Fast:    return RefreshMode::Fast;
-        case RefreshHint::Quality: return RefreshMode::Quality;
-        case RefreshHint::Full:    return RefreshMode::Clear;
-        default:                   return RefreshMode::Full;  // Auto → GL16
+        case RefreshHint::Fast:     return RefreshMode::TextFast;
+        case RefreshHint::Standard: return RefreshMode::TextStd;
+        case RefreshHint::Quality:  return RefreshMode::TextQuality;
+        case RefreshHint::Full:     return RefreshMode::Clear;
+        default:                    return RefreshMode::Full;  // Auto → GL16
     }
 }
 

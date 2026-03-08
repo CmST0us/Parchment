@@ -29,7 +29,7 @@ void EpdTestViewController::TestPatternView::onDraw(ink::Canvas& canvas) {
     int gradientH = b.h / 3;
     int textH = b.h / 3;
 
-    const EpdFont* font = ui_font_get(24);
+    const EpdFont* font = ui_font_get(32);
 
     if (!patternB) {
         // 上 1/3: 灰度渐变 (黑→白)

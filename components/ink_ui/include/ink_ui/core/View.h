@@ -22,7 +22,8 @@ namespace ink {
 /// EPD 刷新提示，View 携带此提示供 RenderEngine 选择刷新模式
 enum class RefreshHint {
     Fast,       ///< MODE_DU，快速单色刷新
-    Quality,    ///< MODE_GL16，灰度准确不闪
+    Standard,   ///< 自定义 Standard 波形，温和刷白 + 精细控制
+    Quality,    ///< 自定义 Quality 波形，完整刷白 + 精细控制
     Full,       ///< MODE_GC16，闪黑消残影
     Auto,       ///< 由 RenderEngine 根据内容自动决定
 };
