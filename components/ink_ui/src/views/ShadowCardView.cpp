@@ -1,14 +1,11 @@
 /**
  * @file ShadowCardView.cpp
- * @brief 带投影阴影的卡片容器 View 实现。
+ * @brief 带黑色边框的卡片容器 View 实现。
  *
- * 阴影绘制算法（模拟 Figma drop shadow: blur=24, spread=4, opacity=30%）：
+ * 绘制顺序：
  * 1. 白色填充整个 frame（清除底层残留）
- * 2. 逐像素绘制阴影，使用 4×4 Bayer 有序抖动模拟平滑灰度渐变
- * 3. 白色卡片矩形覆盖阴影内部
- *
- * 4bpp 灰度仅 16 级，通过有序抖动在相邻灰度级间插值，
- * 将有效灰度级从 3 级提升到 ~50 级，实现柔和的 Gaussian 模糊效果。
+ * 2. 黑色边框矩形
+ * 3. 白色卡片矩形填充边框内部
  */
 
 #include "ink_ui/views/ShadowCardView.h"
@@ -16,94 +13,38 @@
 
 namespace ink {
 
-/// 4×4 Bayer 有序抖动矩阵（阈值 0-15）
-static constexpr int kBayer4x4[4][4] = {
-    { 0,  8,  2, 10},
-    {12,  4, 14,  6},
-    { 3, 11,  1,  9},
-    {15,  7, 13,  5},
-};
-
 ShadowCardView::ShadowCardView() {
     setBackgroundColor(Color::White);
     setOpaque(true);
 }
 
 Rect ShadowCardView::cardRect() const {
-    return {kShadowSpread, kShadowSpread,
-            bounds().w - 2 * kShadowSpread,
-            bounds().h - 2 * kShadowSpread};
+    return {kEdgeTotal, kEdgeTotal,
+            bounds().w - 2 * kEdgeTotal,
+            bounds().h - 2 * kEdgeTotal};
 }
 
 void ShadowCardView::onDraw(Canvas& canvas) {
     const Rect b = bounds();
 
-    // 1. 白色填充整个 frame（清除底层残留像素）
+    // 1. 白色填充整个 frame
     canvas.fillRect(b, Color::White);
 
-    // 2. 逐像素绘制阴影渐变（Bayer 有序抖动）
-    const Rect card = cardRect();
-    const int cx = card.x + kShadowOffsetX;
-    const int cy = card.y + kShadowOffsetY;
+    // 2. 黑色边框矩形
+    Rect borderRect = {kBorderMargin, kBorderMargin,
+                       b.w - 2 * kBorderMargin,
+                       b.h - 2 * kBorderMargin};
+    // 顶边
+    canvas.fillRect({borderRect.x, borderRect.y, borderRect.w, kBorderWidth}, Color::Black);
+    // 底边
+    canvas.fillRect({borderRect.x, borderRect.y + borderRect.h - kBorderWidth, borderRect.w, kBorderWidth}, Color::Black);
+    // 左边
+    canvas.fillRect({borderRect.x, borderRect.y, kBorderWidth, borderRect.h}, Color::Black);
+    // 右边
+    canvas.fillRect({borderRect.x + borderRect.w - kBorderWidth, borderRect.y, kBorderWidth, borderRect.h}, Color::Black);
 
-    for (int d = 1; d <= kShadowSpread; d++) {
-        // 二次衰减曲线: 靠近卡片暗，远离卡片渐淡
-        float t = static_cast<float>(d - 1) / static_cast<float>(kShadowSpread);
-        float darkness = (1.0f - t) * (1.0f - t) * kMaxShadowLevels;
-
-        if (darkness < 0.05f) break;
-
-        // 分解为整数级和小数部分，用于两级间抖动
-        int levelInt = static_cast<int>(darkness);
-        float levelFrac = darkness - levelInt;
-
-        uint8_t grayLight, grayDark;
-        if (levelInt >= kMaxShadowLevels) {
-            grayLight = grayDark = 0xF0 - kMaxShadowLevels * 0x10;
-            levelFrac = 0;
-        } else {
-            grayLight = 0xF0 - levelInt * 0x10;
-            grayDark  = 0xF0 - (levelInt + 1) * 0x10;
-        }
-
-        // 抖动阈值（0-16 范围，frac * 16 > threshold 时用深色）
-        float fracScaled = levelFrac * 16.0f;
-
-        // ── 顶部条带 ──
-        int y = cy - d;
-        for (int x = cx - d; x < cx + card.w + d; x++) {
-            uint8_t gray = (fracScaled > kBayer4x4[y & 3][x & 3])
-                         ? grayDark : grayLight;
-            if (gray != 0xF0) canvas.drawPixel(x, y, gray);
-        }
-
-        // ── 底部条带 ──
-        y = cy + card.h + d - 1;
-        for (int x = cx - d; x < cx + card.w + d; x++) {
-            uint8_t gray = (fracScaled > kBayer4x4[y & 3][x & 3])
-                         ? grayDark : grayLight;
-            if (gray != 0xF0) canvas.drawPixel(x, y, gray);
-        }
-
-        // ── 左侧条带（排除角落）──
-        int x = cx - d;
-        for (int yy = cy - d + 1; yy < cy + card.h + d - 1; yy++) {
-            uint8_t gray = (fracScaled > kBayer4x4[yy & 3][x & 3])
-                         ? grayDark : grayLight;
-            if (gray != 0xF0) canvas.drawPixel(x, yy, gray);
-        }
-
-        // ── 右侧条带（排除角落）──
-        x = cx + card.w + d - 1;
-        for (int yy = cy - d + 1; yy < cy + card.h + d - 1; yy++) {
-            uint8_t gray = (fracScaled > kBayer4x4[yy & 3][x & 3])
-                         ? grayDark : grayLight;
-            if (gray != 0xF0) canvas.drawPixel(x, yy, gray);
-        }
-    }
-
-    // 3. 白色卡片矩形覆盖阴影内部
-    canvas.fillRect(card, Color::White);
+    // 3. 白色卡片矩形（边框内部）
+    canvas.fillRect(cardRect(), Color::White);
 }
 
 void ShadowCardView::onLayout() {
@@ -162,7 +103,7 @@ Size ShadowCardView::intrinsicSize() const {
     contentH += flexStyle_.padding.verticalTotal();
     contentW += flexStyle_.padding.horizontalTotal();
 
-    return {contentW + 2 * kShadowSpread, contentH + 2 * kShadowSpread};
+    return {contentW + 2 * kEdgeTotal, contentH + 2 * kEdgeTotal};
 }
 
 } // namespace ink

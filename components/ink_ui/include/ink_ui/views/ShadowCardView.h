@@ -1,9 +1,8 @@
 /**
  * @file ShadowCardView.h
- * @brief 带投影阴影的卡片容器 View。
+ * @brief 带黑色边框的卡片容器 View。
  *
- * 用于模态视图（Alert, Toast 等），在 4bpp 灰度墨水屏上
- * 通过灰度渐变实现投影悬浮效果。
+ * 用于模态视图（Alert, Toast 等），绘制 1px 纯黑边框。
  */
 
 #pragma once
@@ -12,32 +11,31 @@
 
 namespace ink {
 
-/// 带投影阴影的卡片容器
+/// 带黑色边框的卡片容器
 class ShadowCardView : public View {
 public:
     ShadowCardView();
 
-    /// 绘制阴影 + 白色卡片
+    /// 绘制黑色边框 + 白色卡片
     void onDraw(Canvas& canvas) override;
 
     /// 计算卡片内部区域并对子 View 执行 FlexBox 布局
     void onLayout() override;
 
-    /// 返回内容尺寸 + 阴影 padding
+    /// 返回内容尺寸 + 边框 padding
     Size intrinsicSize() const override;
 
-    /// 阴影扩散距离（像素），模拟 Figma blur=24 + spread=4 的效果
-    static constexpr int kShadowSpread = 14;
+    /// 边框宽度（像素）
+    static constexpr int kBorderWidth = 1;
 
-    /// 阴影偏移（Figma: X=0, Y=0）
-    static constexpr int kShadowOffsetX = 0;
-    static constexpr int kShadowOffsetY = 0;
+    /// 边框外边距（像素），控制卡片与外框之间的间距
+    static constexpr int kBorderMargin = 2;
 
-    /// 阴影最大深度（距白色的 4bpp 级数，3 = 最深 0xC0）
-    static constexpr int kMaxShadowLevels = 3;
+    /// 总边缘占用（边距 + 边框）
+    static constexpr int kEdgeTotal = kBorderMargin + kBorderWidth;
 
 private:
-    /// 计算卡片内部区域（去除阴影 padding）
+    /// 计算卡片内部区域（去除边框 padding）
     Rect cardRect() const;
 };
 

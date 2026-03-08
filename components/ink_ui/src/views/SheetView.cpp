@@ -3,8 +3,8 @@
  * @brief iOS 16 风格底部 Sheet 视图实现。
  *
  * onDraw() 绘制顺序:
- * 1. 白色填充卡片区域（阴影下方）
- * 2. 顶部 Bayer 抖动阴影渐变（向上扩散）
+ * 1. 白色填充卡片区域
+ * 2. 顶部黑色边框线
  * 3. Handle 灰色矩形居中
  *
  * rebuild() 构建 View 树:
@@ -26,14 +26,6 @@
 #include "ink_ui/views/TextLabel.h"
 
 namespace {
-
-/// 4×4 Bayer 有序抖动矩阵（阈值 0-15）
-static constexpr int kBayer4x4[4][4] = {
-    { 0,  8,  2, 10},
-    {12,  4, 14,  6},
-    { 3, 11,  1,  9},
-    {15,  7, 13,  5},
-};
 
 /// 支持 tap 回调的简单 View（设置项专用）
 class TappableView : public ink::View {
@@ -79,7 +71,7 @@ void SheetView::addItem(const std::string& label, std::function<void()> onTap) {
 }
 
 int SheetView::contentStartY() const {
-    return kTopShadowSpread + kHandleTopMargin + kHandleHeight + kHandleBottomMargin;
+    return kTopBorderWidth + kHandleTopMargin + kHandleHeight + kHandleBottomMargin;
 }
 
 int SheetView::totalHeight() const {
@@ -100,45 +92,16 @@ int SheetView::totalHeight() const {
 void SheetView::onDraw(Canvas& canvas) {
     const Rect b = bounds();
 
-    // 1. 白色填充卡片区域（阴影下方）
-    Rect cardArea = {0, kTopShadowSpread, b.w, b.h - kTopShadowSpread};
-    canvas.fillRect(cardArea, Color::White);
+    // 1. 白色填充卡片区域
+    canvas.fillRect({0, 0, b.w, b.h}, Color::White);
 
-    // 2. 顶部阴影渐变（Bayer 抖动，向上扩散）
-    for (int d = 1; d <= kTopShadowSpread; d++) {
-        // d=1 最靠近卡片（最暗），d=kTopShadowSpread 最远（最淡）
-        float t = static_cast<float>(d - 1) / static_cast<float>(kTopShadowSpread);
-        float darkness = (1.0f - t) * (1.0f - t) * kMaxShadowLevels;
-
-        if (darkness < 0.05f) break;
-
-        int levelInt = static_cast<int>(darkness);
-        float levelFrac = darkness - levelInt;
-
-        uint8_t grayLight, grayDark;
-        if (levelInt >= kMaxShadowLevels) {
-            grayLight = grayDark = 0xF0 - kMaxShadowLevels * 0x10;
-            levelFrac = 0;
-        } else {
-            grayLight = 0xF0 - levelInt * 0x10;
-            grayDark  = 0xF0 - (levelInt + 1) * 0x10;
-        }
-
-        float fracScaled = levelFrac * 16.0f;
-
-        // 水平条带：从卡片顶部向上
-        int y = kTopShadowSpread - d;
-        for (int x = 0; x < b.w; x++) {
-            uint8_t gray = (fracScaled > kBayer4x4[y & 3][x & 3])
-                         ? grayDark : grayLight;
-            if (gray != 0xF0) canvas.drawPixel(x, y, gray);
-        }
-    }
+    // 2. 顶部黑色边框线
+    canvas.fillRect({0, 0, b.w, kTopBorderWidth}, Color::Black);
 
     // 3. 抓手 Handle（灰色矩形居中）
     int handleX = (b.w - kHandleWidth) / 2;
-    int handleY = kTopShadowSpread + kHandleTopMargin;
-    canvas.fillRect({handleX, handleY, kHandleWidth, kHandleHeight}, Color::Light);
+    int handleY = kTopBorderWidth + kHandleTopMargin;
+    canvas.fillRect({handleX, handleY, kHandleWidth, kHandleHeight}, Color::Black);
 }
 
 void SheetView::onLayout() {

@@ -2,7 +2,7 @@
  * @file SheetView.h
  * @brief iOS 16 风格底部 Sheet 视图组件。
  *
- * 全宽卡片从屏幕底部弹出，顶部带 Bayer 抖动阴影渐变和抓手 Handle。
+ * 全宽卡片从屏幕底部弹出，顶部带黑色边框线和抓手 Handle。
  * 提供配置式 API 添加标题和可点击设置项，内部延迟构建 View 树。
  */
 
@@ -43,8 +43,8 @@ public:
     Size intrinsicSize() const override;
 
 private:
-    /// 顶部阴影扩散距离
-    static constexpr int kTopShadowSpread = 14;
+    /// 顶部边框线宽度
+    static constexpr int kTopBorderWidth = 1;
     /// 抓手 Handle 尺寸和边距
     static constexpr int kHandleWidth = 40;
     static constexpr int kHandleHeight = 4;
@@ -56,8 +56,6 @@ private:
     static constexpr int kContentPadBottom = 24;
     /// 设置项高度
     static constexpr int kItemHeight = 48;
-    /// 阴影最大深度（距白色的 4bpp 级数）
-    static constexpr int kMaxShadowLevels = 3;
     /// 屏幕宽度
     static constexpr int kScreenWidth = 540;
 

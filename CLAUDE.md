@@ -21,9 +21,11 @@ main/
     BootViewController     - 启动画面
     LibraryViewController  - 书架页面
     ReaderViewController   - 阅读页面
+    EpdTestViewController  - EPD 刷新模式调试页面
   views/              - 自定义 View 组件
     BookCoverView          - 书籍封面卡片
     BootLogoView           - 启动 Logo
+    ReaderContentView      - 文本分页渲染
   pages/              - 旧 ui_core 页面 (C, 遗留代码)
     page_boot, page_library
 
@@ -86,12 +88,12 @@ idf.py flash monitor
 - 语言: C++17, 命名空间 `ink::`
 - View 树: UIKit 风格嵌套, `ink::View` 基类
 - 布局: FlexBox (Column/Row + flexGrow + gap + padding)
-- 渲染: 脏区域追踪 + 统一 GL16 局部刷新
+- 渲染: 脏区域追踪 + RefreshHint 驱动的自定义波形局部刷新
 - 手势: GestureRecognizer 触摸手势识别
 - 所有权: unique_ptr 为主, parent 用 raw pointer
 - **VC View 生命周期**: iOS 风格两步创建 — `loadView()` 创建 View 树，`viewDidLoad()` 做加载后配置。`view()` 访问器在加载后始终返回有效指针（即使 `view_` 已被 `takeView()` 移走）。`loadView()` 中用 `view_` 赋值，其他场景用 `view()` 访问
 - 页面导航: ViewController + NavigationController (页面栈)
-- 窗口: Application 管理 Window, 含持久 StatusBar
+- 窗口: Application 管理 Window, 含持久 StatusBar; `requestTransitionRefresh()` 全屏 W>B>GL 过渡
 - 入口: `app_main()` → `ink::Application::init()` + `app.run()` 事件循环
 
 ### 旧 ui_core 框架 (遗留)
@@ -120,9 +122,30 @@ idf.py flash monitor
 epdiy 的 `epd_fullclear()`、`epd_hl_update_screen()`、`epd_clear()` 等函数**不会自动管理电源**。调用方必须在这些函数前后显式调用 `epd_poweron()` / `epd_poweroff()`。`epd_driver.c` 封装层已处理此逻辑。
 
 ### EPD 刷新模式
-- 全屏刷新: `MODE_GL16`（不闪黑，灰度准确）
-- 局部刷新: `MODE_DU`（不闪黑，单色直接更新，最快）
-- `MODE_GC16` 会闪黑，仅在需要彻底消除残影时使用（如 `epd_fullclear`）
+
+#### epdiy 内置模式
+- `MODE_GL16`: 灰度准确，不闪黑
+- `MODE_DU`: 单色直接更新，最快（仅供 W>B>GL 过渡内部使用）
+- `MODE_GC16`: 闪黑全清，消残影（如 `epd_fullclear`）
+
+#### 自定义文本波形 (`epd_driver.c`)
+基于 M5GFX lut_text，三种模式共用 7 个精细控制相位，通过前置刷白相位数控制质量：
+- **TextFast** (7 相位): 无前置刷白，最快
+- **TextStd** (9 相位): 2 个温和刷白 + 7 控制
+- **TextQuality** (12 相位): 5 个刷白（3 强力 + 2 温和） + 7 控制，暗色目标渐进减少刷白保留深黑
+
+#### InkUI 刷新链路
+`RefreshHint`(View) → `RefreshMode`(DisplayDriver) → EPD 驱动调用：
+- `RefreshHint::Fast` → `RefreshMode::TextFast` → `epd_driver_update_area_custom(EPD_REFRESH_FAST)`
+- `RefreshHint::Standard` → `RefreshMode::TextStd` → `epd_driver_update_area_custom(EPD_REFRESH_STANDARD)`
+- `RefreshHint::Quality` → `RefreshMode::TextQuality` → `epd_driver_update_area_custom(EPD_REFRESH_QUALITY)`
+- `RefreshHint::Full` → `RefreshMode::Clear` → `MODE_GC16`
+- `RefreshHint::Auto` → `RefreshMode::Full` → `MODE_GL16`
+
+#### 翻页刷新策略
+- 普通翻页使用 `RefreshHint::Quality`（TextQuality 自定义波形）
+- 每 20 次翻页触发 W>B>GL 全屏过渡消残影（`Application::requestTransitionRefresh()`）
+- W>B>GL 过渡会标脏整个 windowRoot_（含 StatusBar），确保全屏重绘
 
 ### 显示坐标系
 - 逻辑坐标: 540x960 portrait (x: 0-539 左→右, y: 0-959 上→下)
