@@ -11,6 +11,7 @@
 #include "controllers/ReaderViewController.h"
 #include "controllers/EpdTestViewController.h"
 #include "views/BookCoverView.h"
+#include "ink_ui/views/AlertView.h"
 
 extern "C" {
 #include "esp_log.h"
@@ -79,7 +80,16 @@ void LibraryViewController::loadView() {
         });
         sheet->addItem("关于", [this]() {
             ESP_LOGI("LibraryVC", "About tapped");
-            app_.modalPresenter().dismiss(ink::ModalChannel::Modal);
+            // 不手动 dismiss Sheet — showAlert 优先级更高，会自动替换
+            auto alert = std::make_unique<ink::AlertView>();
+            alert->setTitleFont(ui_font_get(24));
+            alert->setFont(ui_font_get(20));
+            alert->setTitle("Parchment");
+            alert->setMessage("v0.0.1");
+            alert->addButton("确定", [this]() {
+                app_.modalPresenter().dismiss(ink::ModalChannel::Modal);
+            }, true);
+            app_.modalPresenter().showAlert(std::move(alert));
         });
 
         app_.modalPresenter().showSheet(std::move(sheet));
