@@ -57,11 +57,15 @@ private:
     /// 翻到上一页
     void prevPage();
 
+    /// 翻页刷新：普通用 Quality，每 N 次触发 W>B>GL 消残影
+    void applyPageFlipRefresh();
+
     /// 更新页脚文本（根据当前状态）
     void updateFooter();
 
     /// 获取书名（不含 .txt 后缀）
     std::string bookDisplayName() const;
 
-    static constexpr int kStatusTimerId = 100;  ///< 状态更新唤醒定时器
+    static constexpr int kStatusTimerId = 100;      ///< 状态更新唤醒定时器
+    static constexpr int kGhostClearInterval = 20;  ///< 每 N 次翻页触发残影清除
 };

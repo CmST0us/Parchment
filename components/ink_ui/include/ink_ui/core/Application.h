@@ -51,6 +51,9 @@ public:
     /// 获取模态呈现器
     ModalPresenter& modalPresenter() { return *modalPresenter_; }
 
+    /// 请求全屏 W>B>GL 过渡刷新（标脏整个 window 树 + 设置过渡标志）
+    void requestTransitionRefresh();
+
 private:
     NavigationController navigator_;
     QueueHandle eventQueue_ = nullptr;

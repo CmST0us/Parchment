@@ -316,7 +316,7 @@ void ReaderViewController::nextPage() {
     if (total > 0 && current + 1 >= total) return;
 
     contentView_->setCurrentPage(current + 1);
-    if (contentView_) contentView_->setRefreshHint(ink::RefreshHint::Quality);
+    applyPageFlipRefresh();
 
     // 翻页后 header 浮层需要重绘（内容重绘会覆盖其区域）
     if (headerOverlay_ && !headerOverlay_->isHidden()) {
@@ -330,7 +330,7 @@ void ReaderViewController::prevPage() {
     if (!contentView_ || contentView_->currentPage() <= 0) return;
 
     contentView_->setCurrentPage(contentView_->currentPage() - 1);
-    if (contentView_) contentView_->setRefreshHint(ink::RefreshHint::Quality);
+    applyPageFlipRefresh();
 
     // 翻页后 header 浮层需要重绘（内容重绘会覆盖其区域）
     if (headerOverlay_ && !headerOverlay_->isHidden()) {
@@ -338,6 +338,19 @@ void ReaderViewController::prevPage() {
     }
 
     updateFooter();
+}
+
+void ReaderViewController::applyPageFlipRefresh() {
+    pageFlipCount_++;
+    if (pageFlipCount_ >= kGhostClearInterval) {
+        // 每 N 次翻页触发 W>B>GL 全屏刷新消残影
+        // 通过 Application 标脏整个 window 树（含 StatusBar），避免 W>B 后残留黑边
+        pageFlipCount_ = 0;
+        app_.requestTransitionRefresh();
+        ESP_LOGI(TAG, "Ghost clear triggered after %d page flips", kGhostClearInterval);
+    } else {
+        contentView_->setRefreshHint(ink::RefreshHint::Quality);
+    }
 }
 
 void ReaderViewController::updateFooter() {

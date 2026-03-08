@@ -126,6 +126,16 @@ void Application::mountViewController(ViewController* vc) {
             (statusBar_ && !statusBar_->isHidden()) ? "visible" : "hidden");
 }
 
+void Application::requestTransitionRefresh() {
+    if (windowRoot_) {
+        windowRoot_->setNeedsLayout();
+        windowRoot_->setNeedsDisplay();
+    }
+    if (renderEngine_) {
+        renderEngine_->setPendingTransition();
+    }
+}
+
 // ── 初始化 ──
 
 bool Application::init(DisplayDriver& display, TouchDriver& touch,
