@@ -19,9 +19,10 @@ constexpr int kFbPhysHeight = 540;   ///< 物理 framebuffer 高度 (landscape)
 
 /// 刷新模式
 enum class RefreshMode {
-    Full,   ///< 灰度准确刷新，不闪黑 (对应 MODE_GL16)
-    Fast,   ///< 快速单色刷新 (对应 MODE_DU)
-    Clear,  ///< 闪黑全清，消残影 (对应 MODE_GC16)
+    Full,    ///< 灰度准确刷新，不闪黑 (对应 MODE_GL16)
+    Fast,    ///< 快速单色刷新 (对应 MODE_DU)
+    Clear,   ///< 闪黑全清，消残影 (对应 MODE_GC16)
+    Quality, ///< 自定义 Quality 波形刷新，带刷白前缀消残影 (不闪黑)
 };
 
 /// 显示驱动抽象接口

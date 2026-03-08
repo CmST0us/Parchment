@@ -175,13 +175,23 @@ void RenderEngine::drawView(View* view, bool forced) {
 
 // ── Phase 4: Flush ──
 
+/// RefreshHint → RefreshMode 映射
+static RefreshMode hintToMode(RefreshHint hint) {
+    switch (hint) {
+        case RefreshHint::Fast:    return RefreshMode::Fast;
+        case RefreshHint::Quality: return RefreshMode::Quality;
+        case RefreshHint::Full:    return RefreshMode::Clear;
+        default:                   return RefreshMode::Full;  // Auto → GL16
+    }
+}
+
 void RenderEngine::flush() {
     mergeOverlappingRegions();
 
-    // 逐区域刷新（统一使用 Full 模式，支持灰度且不闪黑）
     for (int i = 0; i < dirtyCount_; i++) {
         Rect phys = logicalToPhysical(dirtyRegions_[i].rect);
-        driver_.updateArea(phys.x, phys.y, phys.w, phys.h, RefreshMode::Full);
+        RefreshMode mode = hintToMode(dirtyRegions_[i].hint);
+        driver_.updateArea(phys.x, phys.y, phys.w, phys.h, mode);
     }
 }
 

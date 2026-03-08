@@ -136,6 +136,18 @@ esp_err_t epd_driver_white_black_du_then_gl16(void);
 esp_err_t epd_driver_update_screen_custom(epd_refresh_mode_t mode);
 
 /**
+ * @brief 自定义波形区域刷新。
+ *
+ * 与 epd_driver_update_screen_custom() 相同的波形，但仅刷新指定区域。
+ *
+ * @param x, y, w, h 物理坐标区域。
+ * @param mode 刷新模式。
+ * @return ESP_OK 成功。
+ */
+esp_err_t epd_driver_update_area_custom(int x, int y, int w, int h,
+                                         epd_refresh_mode_t mode);
+
+/**
  * @brief 标准模式全屏刷新（等同于 STANDARD 模式）。
  * @deprecated 使用 epd_driver_update_screen_custom(EPD_REFRESH_STANDARD)。
  */

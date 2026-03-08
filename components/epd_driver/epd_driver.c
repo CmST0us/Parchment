@@ -217,6 +217,30 @@ esp_err_t epd_driver_update_area_mode(int x, int y, int w, int h, int mode) {
     return ESP_OK;
 }
 
+esp_err_t epd_driver_update_area_custom(int x, int y, int w, int h,
+                                         epd_refresh_mode_t mode) {
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    build_custom_waveform(mode);
+    const EpdWaveform *original = s_hl_state.waveform;
+    s_hl_state.waveform = &s_custom_waveform;
+
+    EpdRect area = {.x = x, .y = y, .width = w, .height = h};
+    epd_poweron();
+    enum EpdDrawError err = epd_hl_update_area(&s_hl_state, MODE_GL16, 25, area);
+    epd_poweroff();
+
+    s_hl_state.waveform = original;
+
+    if (err != EPD_DRAW_SUCCESS) {
+        ESP_LOGE(TAG, "Custom area update failed: %d", err);
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
 void epd_driver_clear(void) {
     if (!s_initialized) {
         return;

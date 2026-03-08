@@ -47,19 +47,27 @@ bool EpdDriver::updateArea(int x, int y, int w, int h, RefreshMode mode) {
     if (!initialized_) {
         return false;
     }
-    int epdiyMode = static_cast<int>(toEpdMode(mode));
 
 #ifdef CONFIG_INKUI_PROFILE
     const char* modeName = "?";
     switch (mode) {
-        case RefreshMode::Full:  modeName = "GL16"; break;
-        case RefreshMode::Fast:  modeName = "DU"; break;
-        case RefreshMode::Clear: modeName = "GC16"; break;
+        case RefreshMode::Full:    modeName = "GL16"; break;
+        case RefreshMode::Fast:    modeName = "DU"; break;
+        case RefreshMode::Clear:   modeName = "GC16"; break;
+        case RefreshMode::Quality: modeName = "Quality"; break;
     }
     INKUI_PROFILE_BEGIN(epd);
 #endif
 
-    bool ok = epd_driver_update_area_mode(x, y, w, h, epdiyMode) == ESP_OK;
+    bool ok;
+    if (mode == RefreshMode::Quality) {
+        ok = epd_driver_update_area_custom(x, y, w, h, EPD_REFRESH_QUALITY)
+             == ESP_OK;
+    } else {
+        ok = epd_driver_update_area_mode(x, y, w, h,
+                                          static_cast<int>(toEpdMode(mode)))
+             == ESP_OK;
+    }
 
 #ifdef CONFIG_INKUI_PROFILE
     INKUI_PROFILE_END(epd);

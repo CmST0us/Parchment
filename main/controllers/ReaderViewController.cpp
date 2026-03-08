@@ -316,18 +316,7 @@ void ReaderViewController::nextPage() {
     if (total > 0 && current + 1 >= total) return;
 
     contentView_->setCurrentPage(current + 1);
-    pageFlipCount_++;
-
-    // 残影管理
-    int refreshInterval = prefs_.full_refresh_pages;
-    if (refreshInterval <= 0) refreshInterval = SETTINGS_DEFAULT_FULL_REFRESH;
-
-    if (pageFlipCount_ >= refreshInterval) {
-        pageFlipCount_ = 0;
-        if (view()) view()->setRefreshHint(ink::RefreshHint::Full);
-    } else {
-        if (view()) view()->setRefreshHint(ink::RefreshHint::Quality);
-    }
+    if (contentView_) contentView_->setRefreshHint(ink::RefreshHint::Quality);
 
     // 翻页后 header 浮层需要重绘（内容重绘会覆盖其区域）
     if (headerOverlay_ && !headerOverlay_->isHidden()) {
@@ -341,17 +330,7 @@ void ReaderViewController::prevPage() {
     if (!contentView_ || contentView_->currentPage() <= 0) return;
 
     contentView_->setCurrentPage(contentView_->currentPage() - 1);
-    pageFlipCount_++;
-
-    int refreshInterval = prefs_.full_refresh_pages;
-    if (refreshInterval <= 0) refreshInterval = SETTINGS_DEFAULT_FULL_REFRESH;
-
-    if (pageFlipCount_ >= refreshInterval) {
-        pageFlipCount_ = 0;
-        if (view()) view()->setRefreshHint(ink::RefreshHint::Full);
-    } else {
-        if (view()) view()->setRefreshHint(ink::RefreshHint::Quality);
-    }
+    if (contentView_) contentView_->setRefreshHint(ink::RefreshHint::Quality);
 
     // 翻页后 header 浮层需要重绘（内容重绘会覆盖其区域）
     if (headerOverlay_ && !headerOverlay_->isHidden()) {
