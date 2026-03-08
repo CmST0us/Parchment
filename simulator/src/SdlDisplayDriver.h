@@ -31,6 +31,7 @@ public:
     bool updateScreen() override;
     void fullClear() override;
     void setAllWhite() override;
+    void setAllBlack() override;
     int width() const override;
     int height() const override;
 

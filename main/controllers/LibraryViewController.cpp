@@ -45,7 +45,7 @@ LibraryViewController::LibraryViewController(ink::Application& app)
 void LibraryViewController::loadView() {
     ESP_LOGI(TAG, "loadView");
 
-    const EpdFont* fontLarge = ui_font_get(28);
+    const EpdFont* fontLarge = ui_font_get(24);
     const EpdFont* fontSmall = ui_font_get(16);
 
     // 根 View: FlexBox Column（由 contentArea_ 约束尺寸）

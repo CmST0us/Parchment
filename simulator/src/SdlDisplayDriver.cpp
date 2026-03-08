@@ -101,6 +101,10 @@ void SdlDisplayDriver::setAllWhite() {
     memset(fb_, 0xFF, kFbSize);
 }
 
+void SdlDisplayDriver::setAllBlack() {
+    memset(fb_, 0x00, kFbSize);
+}
+
 int SdlDisplayDriver::width() const {
     return kPhysW;
 }

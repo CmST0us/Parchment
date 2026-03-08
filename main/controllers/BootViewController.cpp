@@ -27,7 +27,7 @@ BootViewController::BootViewController(ink::Application& app)
 void BootViewController::loadView() {
     ESP_LOGI(TAG, "loadView");
 
-    const EpdFont* fontLarge = ui_font_get(28);
+    const EpdFont* fontLarge = ui_font_get(24);
     const EpdFont* fontMedium = ui_font_get(20);
     const EpdFont* fontSmall = ui_font_get(16);
 
